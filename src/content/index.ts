@@ -242,12 +242,12 @@ function ensureFloatingPanel(): void {
   style.id = "chatmap-floating-style";
   style.textContent = `
     .chatmap-floating-panel {
-      background: #fffefb;
-      border: 1px solid #d1d9d4;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #d7e3ec;
       border-radius: 8px;
       bottom: 92px;
-      box-shadow: 0 18px 42px rgba(31, 41, 55, 0.18);
-      color: #1f2937;
+      box-shadow: 0 18px 42px rgba(20, 68, 105, 0.14);
+      color: #102033;
       display: grid;
       font: 12px Inter, ui-sans-serif, system-ui, sans-serif;
       gap: 8px;
@@ -276,10 +276,10 @@ function ensureFloatingPanel(): void {
       gap: 6px;
     }
     .chatmap-floating-panel button {
-      background: #ffffff;
-      border: 1px solid #bec7bc;
+      background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+      border: 1px solid #a9c3d4;
       border-radius: 6px;
-      color: #1f2937;
+      color: #102033;
       cursor: pointer;
       font: inherit;
       padding: 5px 8px;
@@ -310,20 +310,20 @@ function ensureFloatingPanel(): void {
       width: 100%;
     }
     .chatmap-floating-list span {
-      color: #68736e;
+      color: #708397;
       font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
     }
     .chatmap-floating-list strong {
-      color: #17211d;
+      color: #102033;
       font-size: 12px;
       line-height: 1.35;
       overflow-wrap: anywhere;
       white-space: normal;
     }
     .chatmap-floating-list p {
-      color: #5c6460;
+      color: #5c6f82;
       margin: 0;
     }
   `;
@@ -369,9 +369,9 @@ function ensureLauncherStyle(): void {
     .chatmap-launcher {
       align-items: center;
       background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.22);
+      border: 1px solid rgba(215, 227, 236, 0.9);
       border-radius: 13px;
-      box-shadow: 0 12px 28px rgba(31, 41, 55, 0.22);
+      box-shadow: 0 12px 28px rgba(20, 68, 105, 0.2);
       color: #ffffff;
       cursor: pointer;
       display: grid;
@@ -393,7 +393,7 @@ function ensureLauncherStyle(): void {
       width: 100%;
     }
     .chatmap-launcher:hover {
-      box-shadow: 0 14px 34px rgba(37, 99, 235, 0.34);
+      box-shadow: 0 14px 34px rgba(20, 120, 200, 0.32);
       transform: translateY(-1px);
     }
     .chatmap-launcher:focus-visible {

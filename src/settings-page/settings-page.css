@@ -1,4 +1,7 @@
 .settings-page {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(20, 120, 200, 0.08), transparent 28%),
+    linear-gradient(180deg, #fbfdff 0%, var(--cm-bg) 100%);
   display: grid;
   gap: 18px;
   margin: 0 auto;
@@ -9,7 +12,7 @@
 
 .settings-page__header {
   align-items: center;
-  border-bottom: 1px solid #ded8ce;
+  border-bottom: 1px solid var(--cm-border);
   display: flex;
   gap: 16px;
   justify-content: space-between;
@@ -17,13 +20,14 @@
 }
 
 .settings-page__header h1 {
+  color: var(--cm-text);
   font-size: 26px;
   line-height: 1.2;
   margin: 0;
 }
 
 .settings-page__header p {
-  color: #5c6460;
+  color: var(--cm-text-muted);
   margin: 6px 0 0;
 }
 
@@ -35,10 +39,10 @@
 }
 
 .settings-section {
-  background: #fffefb;
-  border: 1px solid #d1d9d4;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--cm-border);
   border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(31, 41, 55, 0.1);
+  box-shadow: var(--cm-shadow-soft);
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -60,12 +64,12 @@
 }
 
 .settings-section__header span {
-  color: #5c6460;
+  color: var(--cm-text-muted);
   font-size: 12px;
 }
 
 .settings-section label {
-  color: #49534f;
+  color: var(--cm-text-muted);
   display: grid;
   font-size: 12px;
   gap: 4px;
@@ -73,24 +77,24 @@
 
 .settings-section input,
 .settings-section select {
-  border: 1px solid #bec7bc;
+  border: 1px solid var(--cm-border-strong);
   border-radius: 6px;
-  color: #1f2937;
+  color: var(--cm-text);
   font: inherit;
   padding: 8px;
 }
 
 .settings-section p {
-  color: #5c6460;
+  color: var(--cm-text-muted);
   font-size: 12px;
   line-height: 1.5;
   margin: 0;
 }
 
 .settings-page__status {
-  background: #edf3f0;
-  border: 1px solid #d1d9d4;
+  background: var(--cm-teal-soft);
+  border: 1px solid #b8e7e2;
   border-radius: 8px;
-  color: #2f5f55;
+  color: #08706c;
   padding: 12px 14px;
 }

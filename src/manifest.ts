@@ -3,7 +3,7 @@ import type { Manifest } from "./shared/chrome-types";
 const manifest: Manifest = {
   manifest_version: 3,
   name: "ChatMap",
-  version: "0.1.0",
+  version: "0.1.1",
   description: "Turn ChatGPT conversations into an editable mind map.",
   icons: {
     "16": "icons/chatmap-16.png",

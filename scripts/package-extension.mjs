@@ -1,4 +1,4 @@
-import { mkdir, rm, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,7 +89,6 @@ async function main() {
     throw new Error("Manifest web_accessible_resources must expose icons/chatmap-128.png for the launcher");
   }
 
-  await rm(releaseDir, { recursive: true, force: true });
   await mkdir(releaseDir, { recursive: true });
 
   const archiveName = `chatmap-v${version}.zip`;
