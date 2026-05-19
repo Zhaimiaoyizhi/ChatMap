@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { loadAiSettings } from "../settings/ai-settings-storage";
-import { extractJsonObject } from "./json-output";
+import { tryExtractJsonObject } from "./json-output";
 import { requestChatCompletion } from "./openai-compatible";
 
 type EdgeRelationship =
@@ -107,7 +107,7 @@ function normalizeSuggestions(value: unknown, nodes: SuggestionNode[]): Suggeste
 }
 
 function buildPrompt(nodes: SuggestionNode[]): string {
-  return `You are helping organize a ChatGPT conversation into a learning mind map.
+  return `You are helping organize an AI conversation into a learning mind map.
 
 Return strict JSON only with this shape:
 {"edges":[{"source":"node-id","target":"node-id","relationship":"related|depends_on|extends|supports|contradicts|duplicates|references|todo","label":"short label","important":false,"confidence":0.0,"reason":"short reason"}]}
@@ -161,7 +161,10 @@ export async function suggestSemanticEdges(nodes: Node[]): Promise<Edge[]> {
     { temperature: 0.1, maxTokens: 1200, jsonMode: true }
   );
 
-  const suggestions = normalizeSuggestions(extractJsonObject(content), suggestionNodes);
+  const parsed = tryExtractJsonObject(content);
+  if (!parsed) return [];
+
+  const suggestions = normalizeSuggestions(parsed, suggestionNodes);
 
   return suggestions.map((suggestion, index) => ({
     id: `ai-${suggestion.source}-${suggestion.target}-${Date.now()}-${index}`,

@@ -1,9 +1,9 @@
-# ChatMap QA Test Plan
+﻿# TurnMap QA Test Plan
 
 ## Long Conversations
 
 - Open a conversation with 50+ turns.
-- Open ChatMap from the top, middle, and bottom of the conversation.
+- Open TurnMap from the top, middle, and bottom of the conversation.
 - Confirm the turn count is stable after Refresh.
 - Confirm full-page mode opens the same graph.
 - Confirm search can focus an early, middle, and late node.
@@ -19,13 +19,13 @@
 
 - Open a conversation with branch navigation.
 - Switch branches in ChatGPT.
-- Refresh ChatMap.
+- Refresh TurnMap.
 - Confirm current branch content is represented.
 - Confirm old branch nodes do not silently merge with the current branch.
 
 ## Slow Network and Partial Loading
 
-- Open ChatMap while the conversation is still loading.
+- Open TurnMap while the conversation is still loading.
 - Confirm status messages remain understandable.
 - Refresh after the page finishes loading.
 - Confirm deep scan recovers full visible history when API extraction is unavailable.

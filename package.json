@@ -1,12 +1,13 @@
 {
-  "name": "chatmap",
-  "version": "0.1.0",
+  "name": "turnmap",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.mjs",
     "package": "npm run build && node scripts/package-extension.mjs"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import type { FetchConversationApiResult, Turn } from "../shared/types";
+﻿import type { FetchConversationApiResult, Turn } from "../shared/types";
 import { getBestTurnsFromRoots } from "./structured-extractor";
 
 export type ConversationApiExtractionResult = {
@@ -30,7 +30,7 @@ async function fetchFromContentScript(conversationId: string): Promise<unknown |
 async function fetchFromBackground(conversationId: string): Promise<unknown | null> {
   try {
     const response = (await chrome.runtime.sendMessage({
-      type: "CHATMAP_FETCH_CONVERSATION_API",
+      type: "TURNMAP_FETCH_CONVERSATION_API",
       conversationId
     })) as FetchConversationApiResult;
 

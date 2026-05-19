@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --cm-bg: #f6f9fd;
   --cm-bg-grid: #f8fbff;
   --cm-surface: #ffffff;
@@ -40,7 +40,7 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-:root[data-chatmap-theme="night"] {
+:root[data-turnmap-theme="night"] {
   --cm-bg: #0b111a;
   --cm-bg-grid: #0f1722;
   --cm-surface: #121b27;
@@ -78,7 +78,7 @@
   --cm-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
-:root[data-chatmap-theme="eye-care"] {
+:root[data-turnmap-theme="eye-care"] {
   --cm-bg: #f3f8ef;
   --cm-bg-grid: #f8fbf4;
   --cm-surface: #fffffa;
@@ -159,7 +159,7 @@ button:disabled {
   opacity: 0.58;
 }
 
-.chatmap-icon {
+.turnmap-icon {
   display: inline-block;
   flex: 0 0 auto;
 }
@@ -178,7 +178,7 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.button-with-icon .chatmap-icon {
+.button-with-icon .turnmap-icon {
   color: var(--cm-primary);
 }
 
@@ -376,6 +376,10 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.debug-panel__button {
+  padding: 5px 8px;
+}
+
 .canvas-shell {
   background:
     radial-gradient(circle at top left, rgba(20, 120, 200, 0.08), transparent 32%),
@@ -469,7 +473,7 @@ textarea:focus-visible {
   padding: 6px 8px;
 }
 
-.layout-picker .chatmap-icon {
+.layout-picker .turnmap-icon {
   color: var(--cm-primary);
 }
 
@@ -558,6 +562,17 @@ textarea:focus-visible {
   width: 260px;
 }
 
+.turn-node.is-colored {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--node-accent) var(--node-color-fill-mix, 25%), transparent), transparent 58%),
+    var(--cm-node-bg);
+  border-color: color-mix(in srgb, var(--node-accent) var(--node-color-border-mix, 58%), var(--cm-border));
+}
+
+:root[data-turnmap-node-color-render="solid"] .turn-node.is-colored {
+  background: color-mix(in srgb, var(--node-accent) var(--node-color-fill-mix, 25%), var(--cm-node-bg));
+}
+
 .turn-node.is-selected {
   border-color: var(--cm-primary);
   box-shadow:
@@ -588,6 +603,42 @@ textarea:focus-visible {
   letter-spacing: 0;
   margin-bottom: 8px;
   text-transform: uppercase;
+}
+
+.turn-node__drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.turn-node__drag-handle:active {
+  cursor: grabbing;
+}
+
+.react-flow__node.is-endpoint-highlight .turn-node {
+  border-color: var(--cm-primary);
+  box-shadow:
+    0 0 0 3px rgba(20, 120, 200, 0.22),
+    var(--cm-shadow);
+}
+
+.turn-node.is-important {
+  border-width: 3px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--node-accent, var(--cm-primary)) var(--node-color-shadow-mix, 22%), transparent),
+    0 18px 34px color-mix(in srgb, var(--node-accent, var(--cm-primary)) var(--node-color-shadow-mix, 22%), transparent),
+    var(--cm-shadow);
+}
+
+.turn-node.is-collapsed {
+  min-height: 92px;
+}
+
+.turn-node.is-collapsed h2,
+.turn-node.is-collapsed p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .turn-node__mini-button {
@@ -680,6 +731,43 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.color-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.color-picker__title {
+  color: var(--cm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.color-picker__row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.color-swatch-button {
+  border: 1px solid rgba(16, 32, 51, 0.22);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.color-swatch-button[aria-pressed="true"],
+.color-swatch-button:hover,
+.color-swatch-button:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--cm-surface),
+    0 0 0 4px var(--cm-primary),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
 
 .suggestion-panel {
@@ -805,28 +893,6 @@ textarea:focus-visible {
   padding: 7px 8px;
 }
 
-.relationship-type-select {
-  align-items: center;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: 14px minmax(0, 1fr);
-  min-width: 0;
-}
-
-.relationship-type-select__swatch {
-  border: 1px solid rgba(16, 32, 51, 0.18);
-  border-radius: 3px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
-  display: inline-block;
-  height: 12px;
-  width: 12px;
-}
-
-.relationship-type-select select {
-  min-width: 0;
-  width: 100%;
-}
-
 .suggestion-item p {
   color: var(--cm-text-muted);
   font-size: 12px;
@@ -930,6 +996,7 @@ textarea:focus-visible {
   align-items: center;
   display: flex !important;
   flex-direction: row;
+  font-weight: 800;
 }
 
 .panel-note {

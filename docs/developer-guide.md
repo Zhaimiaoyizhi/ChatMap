@@ -1,4 +1,4 @@
-# ChatMap Developer Guide
+﻿# TurnMap Developer Guide
 
 ## Stack
 
@@ -11,7 +11,7 @@
 ## Project Layout
 
 - `src/content`: ChatGPT page extraction, jumping, Float, and planned launcher integration.
-- `src/side-panel`: main ChatMap UI.
+- `src/side-panel`: main TurnMap UI.
 - `src/full-page`: full-page entrypoint.
 - `src/background`: service worker and API forwarding.
 - `src/shared`: shared message and type definitions.
@@ -32,7 +32,7 @@ npm.cmd run package
 Graph state is stored per conversation in `chrome.storage.local` using keys like:
 
 ```text
-chatmap.graph.<conversationId>
+turnmap.graph.<conversationId>
 ```
 
 Raw extracted turns are cached in IndexedDB.
@@ -40,7 +40,7 @@ Raw extracted turns are cached in IndexedDB.
 AI settings are stored in `chrome.storage.local`:
 
 ```text
-chatmap.aiSettings
+turnmap.aiSettings
 ```
 
 ## Settings Page
@@ -60,11 +60,11 @@ The main map UI should keep high-frequency actions only.
 
 ## Floating Launcher
 
-The content script injects a ChatMap launcher on ChatGPT pages. It should:
+The content script injects a TurnMap launcher on ChatGPT pages. It should:
 
 - Avoid existing ChatGPT floating UI.
 - Persist disabled or moved state.
-- Left-click to open ChatMap.
+- Left-click to open TurnMap.
 - Right-click to open settings.
 
 ## Release Checklist

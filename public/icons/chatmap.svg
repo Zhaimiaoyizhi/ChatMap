@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="ChatMap">
-  <rect width="128" height="128" rx="24" fill="#1f2937"/>
-  <circle cx="38" cy="42" r="14" fill="#fffefb"/>
-  <circle cx="90" cy="38" r="14" fill="#8fd0c3"/>
-  <circle cx="72" cy="88" r="16" fill="#f2c879"/>
-  <path d="M51 41 L76 39 M47 52 L63 77 M84 51 L77 73" stroke="#fffefb" stroke-width="8" stroke-linecap="round"/>
-</svg>

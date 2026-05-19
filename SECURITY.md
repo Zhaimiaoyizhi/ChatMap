@@ -1,8 +1,8 @@
-# Security Policy
+﻿# Security Policy
 
 ## Supported Versions
 
-ChatMap is currently in early preview. Security fixes target the latest `main` branch and the latest GitHub Release.
+TurnMap is currently in early preview. Security fixes target the latest `main` branch and the latest GitHub Release.
 
 ## Reporting a Vulnerability
 
@@ -20,11 +20,11 @@ Do not commit:
 - Browser profile data
 - Screenshots containing private conversations
 
-ChatMap stores AI provider settings, including API keys, in `chrome.storage.local` inside the user's browser extension profile. These values are local to the user's browser and are not part of the repository.
+TurnMap stores AI provider settings, including API keys, in `chrome.storage.local` inside the user's browser extension profile. These values are local to the user's browser and are not part of the repository.
 
 ## Extension Permissions
 
-ChatMap uses permissions for:
+TurnMap uses permissions for:
 
 - Reading the active ChatGPT conversation.
 - Opening Side Panel, Full Page, and Float views.

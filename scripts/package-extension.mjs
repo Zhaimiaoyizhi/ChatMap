@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+﻿import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +60,15 @@ async function main() {
     [
       "https://chatgpt.com/*",
       "https://chatgpt.com/backend-api/*",
+      "https://chat.deepseek.com/*",
+      "https://www.kimi.com/*",
+      "https://kimi.com/*",
+      "https://doubao.com/*",
+      "https://chat.qwen.ai/*",
+      "https://gemini.google.com/*",
+      "https://claude.ai/*",
+      "https://perplexity.ai/*",
+      "https://grok.com/*",
       "https://api.openai.com/*",
       "https://api.deepseek.com/*"
     ],
@@ -85,14 +94,15 @@ async function main() {
     await assertFile(path.join(distDir, iconPath), `Action icon ${size}`);
   }
   const webAccessibleResources = JSON.stringify(manifest.web_accessible_resources ?? []);
-  if (!webAccessibleResources.includes("icons/chatmap-128.png")) {
-    throw new Error("Manifest web_accessible_resources must expose icons/chatmap-128.png for the launcher");
+  if (!webAccessibleResources.includes("icons/turnmap-128.png")) {
+    throw new Error("Manifest web_accessible_resources must expose icons/turnmap-128.png for the launcher");
   }
 
   await mkdir(releaseDir, { recursive: true });
 
-  const archiveName = `chatmap-v${version}.zip`;
+  const archiveName = `turnmap-v${version}.zip`;
   const archivePath = path.join(releaseDir, archiveName);
+  const unpackedDir = path.join(releaseDir, `turnmap-v${version}-unpacked`);
   const command = [
     `$items = Get-ChildItem -LiteralPath ${psQuote(distDir)}`,
     `Compress-Archive -Path $items.FullName -DestinationPath ${psQuote(archivePath)} -Force`,
@@ -109,11 +119,17 @@ async function main() {
 
   await assertFile(archivePath, "Release archive");
 
+  await rm(unpackedDir, { recursive: true, force: true });
+  await mkdir(unpackedDir, { recursive: true });
+  await cp(distDir, unpackedDir, { recursive: true });
+  await assertFile(path.join(unpackedDir, "manifest.json"), "Unpacked manifest");
+
   const readme = [
-    `ChatMap ${version}`,
+    `TurnMap ${version}`,
     "",
     `Archive: ${archiveName}`,
     `Built from: ${distDir}`,
+    `Unpacked QA folder: ${unpackedDir}`,
     "",
     "Load unpacked for local QA:",
     "1. Open edge://extensions",

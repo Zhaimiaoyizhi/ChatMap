@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="TurnMap">
+  <defs>
+    <linearGradient id="bg" x1="5%" y1="0%" x2="95%" y2="100%"><stop offset="0" stop-color="#041330"/><stop offset="1" stop-color="#01081c"/></linearGradient>
+    <linearGradient id="cyanBlue" x1="10%" y1="20%" x2="78%" y2="45%"><stop offset="0" stop-color="#19dbeb"/><stop offset="1" stop-color="#2876ff"/></linearGradient>
+    <linearGradient id="blueViolet" x1="35%" y1="20%" x2="78%" y2="82%"><stop offset="0" stop-color="#24b8ff"/><stop offset="1" stop-color="#7b4bff"/></linearGradient>
+    <linearGradient id="branch" x1="55%" y1="20%" x2="95%" y2="85%"><stop offset="0" stop-color="#2dc5ff"/><stop offset="1" stop-color="#8b48ff"/></linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="154" fill="url(#bg)"/>
+  <path d="M150 313h425m-249 24v305" fill="none" stroke="url(#cyanBlue)" stroke-width="70" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M558 236 704 313 558 390Z" fill="url(#cyanBlue)"/>
+  <path d="M455 650V442l115 123 115-123v248" fill="none" stroke="url(#blueViolet)" stroke-width="78" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M690 534h176M705 444h75v-74h86M705 626h75v78h86" fill="none" stroke="url(#branch)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="866" cy="370" r="56" fill="#1fd7e6"/><circle cx="866" cy="534" r="56" fill="#3c82ff"/><circle cx="866" cy="704" r="56" fill="#844cff"/>
+  <path d="M189 676h153a44 44 0 0 1 44 44v48a44 44 0 0 1-44 44H220l-78 46 26-73a44 44 0 0 1-23-39v-26a44 44 0 0 1 44-44Z" fill="#fff"/>
+  <circle cx="210" cy="744" r="16" fill="#07122b"/><circle cx="265" cy="744" r="16" fill="#07122b"/><circle cx="320" cy="744" r="16" fill="#07122b"/>
+</svg>

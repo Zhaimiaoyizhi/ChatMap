@@ -1,17 +1,12 @@
-import type { ExtractedTurnsMessage, JumpToTurnMessage, Turn } from "../shared/types";
-import {
-  startChatGptObserver,
-  getLatestTurns,
-  harvestTurnsByScrolling,
-  refreshCompleteTurns,
-  refreshLatestTurns,
-  toTurnsMessage
-} from "./chatgpt-observer";
-import { jumpToTurn } from "./jump-controller";
+﻿import type { ExtractedTurnsMessage, JumpToTurnMessage, Turn } from "../shared/types";
+import { selectConversationAdapter, type ConversationAdapter } from "./conversation-adapters";
+import { getTurnMapLauncherIconUrl, loadTurnMapLauncherIconSrc } from "./launcher-icon";
 
 declare global {
   interface Window {
     __chatMapContentStarted?: boolean;
+    __chatMapContentMessageListenerStarted?: boolean;
+    __chatMapContentStorageListenerStarted?: boolean;
   }
 }
 
@@ -21,7 +16,7 @@ function isContentMessage(message: unknown): message is JumpToTurnMessage | { ty
       typeof message === "object" &&
       "type" in message &&
       typeof (message as { type: unknown }).type === "string" &&
-      (message as { type: string }).type.startsWith("CHATMAP_")
+      (message as { type: string }).type.startsWith("TURNMAP_")
   );
 }
 
@@ -31,6 +26,25 @@ function broadcastTurns(message: ExtractedTurnsMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {
     // Side panel may be closed. The next explicit request will fetch current turns.
   });
+}
+
+const activeAdapter = selectConversationAdapter();
+
+function getCurrentAdapter(): ConversationAdapter | null {
+  return activeAdapter;
+}
+
+function toUnsupportedTurnsMessage(): ExtractedTurnsMessage {
+  return {
+    type: "TURNMAP_TURNS_UPDATED",
+    turns: [],
+    conversationTitle: document.title || "Current AI conversation",
+    conversationId: window.location.href,
+    site: {
+      id: "unsupported",
+      displayName: "Unsupported site"
+    }
+  };
 }
 
 let floatingPanel: HTMLElement | null = null;
@@ -46,19 +60,19 @@ type FloatingPosition = {
 };
 
 function floatingPanelEnabledKey(): string {
-  return "chatmap.floatingPanel.enabled";
+  return "turnmap.floatingPanel.enabled";
 }
 
 function floatingPanelPositionKey(): string {
-  return "chatmap.floatingPanel.position";
+  return "turnmap.floatingPanel.position";
 }
 
 function launcherEnabledKey(): string {
-  return "chatmap.launcher.enabled";
+  return "turnmap.launcher.enabled";
 }
 
 function launcherPositionKey(): string {
-  return "chatmap.launcher.position";
+  return "turnmap.launcher.position";
 }
 
 function removeFloatingPanel(): void {
@@ -85,9 +99,9 @@ function renderFloatingPanel(): void {
   floatingPanel.innerHTML = "";
 
   const header = document.createElement("div");
-  header.className = "chatmap-floating-header";
+  header.className = "turnmap-floating-header";
   const title = document.createElement("strong");
-  title.textContent = "ChatMap";
+  title.textContent = "TurnMap";
   const actions = document.createElement("div");
   const collapse = document.createElement("button");
   collapse.type = "button";
@@ -111,7 +125,7 @@ function renderFloatingPanel(): void {
   if (floatingCollapsed) return;
 
   const list = document.createElement("div");
-  list.className = "chatmap-floating-list";
+  list.className = "turnmap-floating-list";
   list.addEventListener("wheel", containFloatingWheel, { passive: false });
   floatingTurns.forEach((turn) => {
     const button = document.createElement("button");
@@ -119,7 +133,7 @@ function renderFloatingPanel(): void {
     button.innerHTML = `<span>Turn ${turn.turnIndex + 1}</span><strong></strong>`;
     button.querySelector("strong")!.textContent = previewText(turn.userText);
     button.addEventListener("click", () => {
-      void jumpToTurn(turn.sourceAnchor);
+      void getCurrentAdapter()?.jumpToTurn(turn.sourceAnchor);
     });
     list.append(button);
   });
@@ -239,9 +253,9 @@ function ensureFloatingPanel(): void {
   }
 
   const style = document.createElement("style");
-  style.id = "chatmap-floating-style";
+  style.id = "turnmap-floating-style";
   style.textContent = `
-    .chatmap-floating-panel {
+    .turnmap-floating-panel {
       background: rgba(255, 255, 255, 0.96);
       border: 1px solid #d7e3ec;
       border-radius: 8px;
@@ -261,21 +275,21 @@ function ensureFloatingPanel(): void {
       width: min(320px, calc(100vw - 36px));
       z-index: 2147483600;
     }
-    .chatmap-floating-header {
+    .turnmap-floating-header {
       align-items: center;
       cursor: grab;
       display: flex;
       justify-content: space-between;
       user-select: none;
     }
-    .chatmap-floating-header:active {
+    .turnmap-floating-header:active {
       cursor: grabbing;
     }
-    .chatmap-floating-header div {
+    .turnmap-floating-header div {
       display: flex;
       gap: 6px;
     }
-    .chatmap-floating-panel button {
+    .turnmap-floating-panel button {
       background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
       border: 1px solid #a9c3d4;
       border-radius: 6px;
@@ -284,7 +298,7 @@ function ensureFloatingPanel(): void {
       font: inherit;
       padding: 5px 8px;
     }
-    .chatmap-floating-list {
+    .turnmap-floating-list {
       display: grid;
       gap: 6px;
       max-height: 286px;
@@ -295,11 +309,11 @@ function ensureFloatingPanel(): void {
       scrollbar-gutter: stable;
       overscroll-behavior: contain;
     }
-    .chatmap-floating-panel:hover .chatmap-floating-list,
-    .chatmap-floating-list:focus-within {
+    .turnmap-floating-panel:hover .turnmap-floating-list,
+    .turnmap-floating-list:focus-within {
       overflow-y: auto;
     }
-    .chatmap-floating-list button {
+    .turnmap-floating-list button {
       box-sizing: border-box;
       display: grid;
       gap: 3px;
@@ -309,20 +323,20 @@ function ensureFloatingPanel(): void {
       text-align: left;
       width: 100%;
     }
-    .chatmap-floating-list span {
+    .turnmap-floating-list span {
       color: #708397;
       font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
     }
-    .chatmap-floating-list strong {
+    .turnmap-floating-list strong {
       color: #102033;
       font-size: 12px;
       line-height: 1.35;
       overflow-wrap: anywhere;
       white-space: normal;
     }
-    .chatmap-floating-list p {
+    .turnmap-floating-list p {
       color: #5c6f82;
       margin: 0;
     }
@@ -330,7 +344,7 @@ function ensureFloatingPanel(): void {
   if (!document.getElementById(style.id)) document.documentElement.append(style);
 
   floatingPanel = document.createElement("aside");
-  floatingPanel.className = "chatmap-floating-panel";
+  floatingPanel.className = "turnmap-floating-panel";
   document.body.append(floatingPanel);
   renderFloatingPanel();
   loadFloatingPosition();
@@ -341,7 +355,7 @@ function setFloatingPanel(enabled: boolean, persist = true): void {
     void chrome.storage.local.set({ [floatingPanelEnabledKey()]: enabled });
   }
   if (enabled) {
-    floatingTurns = getLatestTurns();
+    floatingTurns = getCurrentAdapter()?.getLatestTurns() ?? [];
     ensureFloatingPanel();
   } else {
     removeFloatingPanel();
@@ -349,29 +363,32 @@ function setFloatingPanel(enabled: boolean, persist = true): void {
 }
 
 function openSidePanelFromLauncher(): void {
-  void chrome.runtime.sendMessage({ type: "CHATMAP_OPEN_SIDE_PANEL" }).catch(() => {
-    launcherButton?.setAttribute("title", "ChatMap could not open the side panel.");
+  void chrome.runtime.sendMessage({ type: "TURNMAP_OPEN_SIDE_PANEL" }).catch(() => {
+    launcherButton?.setAttribute("title", "TurnMap could not open the side panel.");
   });
 }
 
 function openSettingsFromLauncher(): void {
-  void chrome.runtime.sendMessage({ type: "CHATMAP_OPEN_SETTINGS" }).catch(() => {
-    launcherButton?.setAttribute("title", "ChatMap settings could not be opened.");
+  void chrome.runtime.sendMessage({ type: "TURNMAP_OPEN_SETTINGS" }).catch(() => {
+    launcherButton?.setAttribute("title", "TurnMap settings could not be opened.");
   });
 }
 
 function ensureLauncherStyle(): void {
-  if (document.getElementById("chatmap-launcher-style")) return;
+  if (document.getElementById("turnmap-launcher-style")) return;
 
   const style = document.createElement("style");
-  style.id = "chatmap-launcher-style";
+  style.id = "turnmap-launcher-style";
   style.textContent = `
-    .chatmap-launcher {
+    .turnmap-launcher {
+      all: initial;
       align-items: center;
+      appearance: none;
       background: transparent;
-      border: 1px solid rgba(215, 227, 236, 0.9);
-      border-radius: 13px;
-      box-shadow: 0 12px 28px rgba(20, 68, 105, 0.2);
+      border: 0;
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(10, 40, 68, 0.28);
+      box-sizing: border-box;
       color: #ffffff;
       cursor: pointer;
       display: grid;
@@ -379,6 +396,8 @@ function ensureLauncherStyle(): void {
       height: 44px;
       justify-items: center;
       line-height: 1;
+      overflow: hidden;
+      padding: 0;
       position: fixed;
       right: 18px;
       top: 38vh;
@@ -386,17 +405,18 @@ function ensureLauncherStyle(): void {
       width: 44px;
       z-index: 2147483599;
     }
-    .chatmap-launcher img {
+    .turnmap-launcher img {
       display: block;
-      height: 100%;
+      height: 44px;
+      object-fit: contain;
       pointer-events: none;
-      width: 100%;
+      width: 44px;
     }
-    .chatmap-launcher:hover {
+    .turnmap-launcher:hover {
       box-shadow: 0 14px 34px rgba(20, 120, 200, 0.32);
       transform: translateY(-1px);
     }
-    .chatmap-launcher:focus-visible {
+    .turnmap-launcher:focus-visible {
       outline: 3px solid rgba(16, 163, 127, 0.32);
       outline-offset: 3px;
     }
@@ -491,14 +511,17 @@ function ensureLauncher(): void {
 
   launcherButton = document.createElement("button");
   launcherButton.type = "button";
-  launcherButton.className = "chatmap-launcher";
+  launcherButton.className = "turnmap-launcher";
   launcherButton.textContent = "";
-  launcherButton.title = "ChatMap: left-click opens map, right-click opens settings";
-  launcherButton.setAttribute("aria-label", "Open ChatMap");
+  launcherButton.title = "TurnMap: left-click opens map, right-click opens settings";
+  launcherButton.setAttribute("aria-label", "Open TurnMap");
   const icon = document.createElement("img");
-  icon.src = chrome.runtime.getURL("icons/chatmap-128.png");
+  icon.src = getTurnMapLauncherIconUrl();
   icon.alt = "";
   launcherButton.append(icon);
+  void loadTurnMapLauncherIconSrc().then((src) => {
+    if (icon.isConnected) icon.src = src;
+  });
   launcherButton.addEventListener("click", (event) => {
     if (launcherMovedDuringPointer) {
       event.preventDefault();
@@ -526,20 +549,24 @@ function syncLauncherFromStorage(): void {
   });
 }
 
-if (!window.__chatMapContentStarted) {
-  window.__chatMapContentStarted = true;
-
+function startTurnMapContentUi(): void {
   syncLauncherFromStorage();
 
   void chrome.storage.local.get(floatingPanelEnabledKey()).then((result) => {
     if (result[floatingPanelEnabledKey()]) {
-      floatingTurns = getLatestTurns();
+      floatingTurns = activeAdapter?.getLatestTurns() ?? [];
       ensureFloatingPanel();
     }
   });
+}
 
-  startChatGptObserver((turns) => broadcastTurns(toTurnsMessage(turns)));
+function startTurnMapContentObservers(): void {
+  activeAdapter?.startObserver((turns) => broadcastTurns(activeAdapter.toTurnsMessage(turns)));
+}
 
+function startTurnMapContentStorageListener(): void {
+  if (window.__chatMapContentStorageListenerStarted) return;
+  window.__chatMapContentStorageListenerStarted = true;
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     if (launcherEnabledKey() in changes) {
@@ -549,41 +576,61 @@ if (!window.__chatMapContentStarted) {
       setFloatingPanel(Boolean(changes[floatingPanelEnabledKey()].newValue), false);
     }
   });
+}
 
+function startTurnMapContentMessageListener(): void {
+  if (window.__chatMapContentMessageListenerStarted) return;
+  window.__chatMapContentMessageListenerStarted = true;
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!isContentMessage(message)) return false;
 
-    if (message.type === "CHATMAP_REQUEST_TURNS") {
+    if (message.type === "TURNMAP_REQUEST_TURNS") {
+      const adapter = getCurrentAdapter();
+      if (!adapter) {
+        sendResponse(toUnsupportedTurnsMessage());
+        return true;
+      }
+
       if ("harvest" in message && message.harvest) {
-        harvestTurnsByScrolling()
-          .then((turns) => sendResponse(toTurnsMessage(turns)))
-          .catch(() => sendResponse(toTurnsMessage(getLatestTurns())));
+        adapter
+          .harvestTurnsByScrolling()
+          .then((turns) => sendResponse(adapter.toTurnsMessage(turns)))
+          .catch(() => sendResponse(adapter.toTurnsMessage(adapter.getLatestTurns())));
         return true;
       }
 
       if ("ensureFull" in message && message.ensureFull) {
-        refreshCompleteTurns()
-          .then((turns) => sendResponse(toTurnsMessage(turns)))
-          .catch(() => sendResponse(toTurnsMessage(getLatestTurns())));
+        adapter
+          .refreshCompleteTurns()
+          .then((turns) => sendResponse(adapter.toTurnsMessage(turns)))
+          .catch(() => sendResponse(adapter.toTurnsMessage(adapter.getLatestTurns())));
         return true;
       }
 
-      refreshLatestTurns()
-        .then((turns) => sendResponse(toTurnsMessage(turns)))
-        .catch(() => sendResponse(toTurnsMessage(getLatestTurns())));
+      adapter
+        .refreshLatestTurns()
+        .then((turns) => sendResponse(adapter.toTurnsMessage(turns)))
+        .catch(() => sendResponse(adapter.toTurnsMessage(adapter.getLatestTurns())));
       return true;
     }
 
-    if (message.type === "CHATMAP_JUMP_TO_TURN") {
-      jumpToTurn((message as JumpToTurnMessage).anchor)
+    if (message.type === "TURNMAP_JUMP_TO_TURN") {
+      const adapter = getCurrentAdapter();
+      if (!adapter) {
+        sendResponse({ ok: false, reason: "This AI conversation site is not supported yet." });
+        return true;
+      }
+
+      adapter
+        .jumpToTurn((message as JumpToTurnMessage).anchor)
         .then(sendResponse)
         .catch(() =>
-          sendResponse({ ok: false, reason: "The original ChatGPT turn could not be found." })
+          sendResponse({ ok: false, reason: "The original conversation turn could not be found." })
         );
       return true;
     }
 
-    if (message.type === "CHATMAP_SET_FLOATING_PANEL") {
+    if (message.type === "TURNMAP_SET_FLOATING_PANEL") {
       setFloatingPanel(Boolean((message as { enabled?: unknown }).enabled));
       sendResponse({ ok: true });
       return true;
@@ -592,3 +639,14 @@ if (!window.__chatMapContentStarted) {
     return false;
   });
 }
+
+const launcherNeedsRepair = !document.querySelector(".turnmap-launcher") || !document.getElementById("turnmap-launcher-style");
+
+if (!window.__chatMapContentStarted || launcherNeedsRepair) {
+  window.__chatMapContentStarted = true;
+  startTurnMapContentUi();
+}
+
+startTurnMapContentObservers();
+startTurnMapContentStorageListener();
+startTurnMapContentMessageListener();

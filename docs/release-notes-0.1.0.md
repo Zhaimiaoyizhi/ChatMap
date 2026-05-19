@@ -1,8 +1,8 @@
-# ChatMap 0.1.0 Release Notes
+﻿# TurnMap 0.1.0 Release Notes
 
 ## Scope
 
-ChatMap 0.1.0 is the first GitHub preview release for the Edge extension. It includes the latest current-conversation mapping, reliable conversation extraction, editable graph workflows, AI-assisted summaries and links, theme/language settings, and export/import recovery.
+TurnMap 0.1.0 is the first GitHub preview release for the Edge extension. It includes the latest current-conversation mapping, reliable conversation extraction, editable graph workflows, AI-assisted summaries and links, theme/language settings, and export/import recovery.
 
 ## Included
 
@@ -17,7 +17,7 @@ ChatMap 0.1.0 is the first GitHub preview release for the Edge extension. It inc
 - Search and node focus.
 - AI summaries and AI link suggestions with OpenAI, DeepSeek, and compatible custom endpoints.
 - Dedicated Settings Page for AI, interface, Float, launcher, and update preferences.
-- ChatGPT Floating Launcher on ChatGPT pages. Left-click opens ChatMap; right-click opens settings.
+- ChatGPT Floating Launcher on ChatGPT pages. Left-click opens TurnMap; right-click opens settings.
 - JSON import/export, Obsidian Canvas export, Markdown export/copy, SVG export, and PNG export.
 - Local graph-state persistence per current conversation.
 - Light Day theme by default, plus Night, Eye-care, and Follow browser theme modes.
@@ -54,6 +54,6 @@ npm.cmd run package
 Output:
 
 ```text
-release/chatmap-v0.1.0.zip
+release/turnmap-v0.1.0.zip
 release/README.txt
 ```

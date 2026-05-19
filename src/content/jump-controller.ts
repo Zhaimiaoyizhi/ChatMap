@@ -1,17 +1,17 @@
-import type { JumpToTurnResult, SourceAnchor } from "../shared/types";
+﻿import type { JumpToTurnResult, SourceAnchor } from "../shared/types";
 import { getLatestTurns } from "./chatgpt-observer";
 import { getChatScrollElement } from "./scroll-container";
 import { findTurnElement, getVisibleTurnIndexRange } from "./turn-extractor";
 
-const HIGHLIGHT_CLASS = "chatmap-source-highlight";
+const HIGHLIGHT_CLASS = "turnmap-source-highlight";
 let jumpSequence = 0;
 let activeJump: { key: string; promise: Promise<JumpToTurnResult> } | null = null;
 
 function ensureHighlightStyle(): void {
-  if (document.getElementById("chatmap-highlight-style")) return;
+  if (document.getElementById("turnmap-highlight-style")) return;
 
   const style = document.createElement("style");
-  style.id = "chatmap-highlight-style";
+  style.id = "turnmap-highlight-style";
   style.textContent = `
     .${HIGHLIGHT_CLASS} {
       outline: 3px solid #10a37f !important;

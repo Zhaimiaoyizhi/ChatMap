@@ -1,6 +1,6 @@
-# Contributing to ChatMap
+﻿# Contributing to TurnMap
 
-Thanks for helping improve ChatMap.
+Thanks for helping improve TurnMap.
 
 ## Development Setup
 

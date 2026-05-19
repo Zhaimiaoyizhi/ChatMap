@@ -1,5 +1,5 @@
-name: Bug report
-description: Report a problem with ChatMap.
+﻿name: Bug report
+description: Report a problem with TurnMap.
 title: "[Bug]: "
 labels: ["bug"]
 body:

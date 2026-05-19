@@ -95,6 +95,26 @@
   overflow-wrap: anywhere;
 }
 
+.settings-fieldset {
+  border: 1px solid var(--cm-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+}
+
+.settings-fieldset legend {
+  color: var(--cm-text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.settings-fieldset input[type="range"] {
+  padding: 0;
+}
+
 .settings-section__inline {
   align-items: end;
   display: grid;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { testAiConnection } from "../ai/openai-compatible";
 import { useI18n } from "../i18n/useI18n";
+import { recordApiTaskLog } from "../task-log";
 import {
   defaultsForProvider,
   loadAiSettings,
@@ -51,15 +52,40 @@ export function AiSettingsForm({ compact = false, onSaved }: AiSettingsFormProps
 
   const testConnection = useCallback(async () => {
     setTesting(true);
-    setStatus(t("ai.status.testing"));
+    const taskId = `test-connection-${settings.provider}-${Date.now()}`;
+    const testingMessage = t("ai.status.testing");
+    setStatus(testingMessage);
+    void recordApiTaskLog({
+      id: taskId,
+      kind: "test-connection",
+      status: "running",
+      message: testingMessage,
+      progress: 25
+    });
 
     try {
       await testAiConnection(settings);
       await saveAiSettings(settings);
-      setStatus(t("ai.status.connectionSaved"));
+      const message = t("ai.status.connectionSaved");
+      setStatus(message);
       onSaved?.(t("ai.status.connectionSavedGlobal"));
+      void recordApiTaskLog({
+        id: taskId,
+        kind: "test-connection",
+        status: "success",
+        message,
+        progress: 100
+      });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("ai.status.failed"));
+      const message = error instanceof Error ? error.message : t("ai.status.failed");
+      setStatus(message);
+      void recordApiTaskLog({
+        id: taskId,
+        kind: "test-connection",
+        status: "error",
+        message,
+        progress: 100
+      });
     } finally {
       setTesting(false);
     }

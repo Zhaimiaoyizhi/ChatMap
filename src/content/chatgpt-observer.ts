@@ -1,4 +1,4 @@
-import type { ExtractedTurnsMessage, Turn } from "../shared/types";
+﻿import type { ExtractedTurnsMessage, Turn } from "../shared/types";
 import { extractConversationApiTurns } from "./conversation-api-extractor";
 import { describeScrollElement, getChatScrollElement } from "./scroll-container";
 import { extractStructuredTurns } from "./structured-extractor";
@@ -191,7 +191,7 @@ export function startChatGptObserver(listener: TurnsListener): void {
 
 export function toTurnsMessage(turns: Turn[]): ExtractedTurnsMessage {
   return {
-    type: "CHATMAP_TURNS_UPDATED",
+    type: "TURNMAP_TURNS_UPDATED",
     turns,
     conversationTitle: getConversationTitle(),
     conversationId: getConversationId(),

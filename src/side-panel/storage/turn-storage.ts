@@ -1,6 +1,6 @@
-import type { Turn } from "../../shared/types";
+﻿import type { Turn } from "../../shared/types";
 
-const DB_NAME = "chatmap";
+const DB_NAME = "turnmap";
 const DB_VERSION = 1;
 const TURN_STORE = "turns";
 

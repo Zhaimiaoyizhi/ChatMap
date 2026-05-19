@@ -21,6 +21,7 @@ import { Icon } from "../components/Icon";
 import type { I18nKey } from "../i18n/i18n-storage";
 import { useI18n } from "../i18n/useI18n";
 import { loadAiSettings } from "../settings/ai-settings-storage";
+import type { ApiTaskKind, ApiTaskStatus } from "../task-log";
 import { TurnNode } from "./TurnNode";
 import {
   loadDefaultLayout,
@@ -30,13 +31,35 @@ import {
   saveStoredGraph,
   type LayoutMode
 } from "./graph-storage";
+import {
+  createZipFromTextFiles,
+  graphToObsidianVaultMarkdownFiles,
+  graphToOpml,
+  type ExportEdge,
+  type ExportNode
+} from "./export-formats";
+import {
+  NODE_COLOR_OPTIONS,
+  colorForRelationship,
+  colorValue,
+  isNodeColorName,
+  type NodeColorName
+} from "./graph-colors";
+import { buildCollapsedTopic } from "./topic-collapse";
 
-type ChatMapCanvasProps = {
+type TurnMapCanvasProps = {
   conversationId: string;
   conversationTitle: string;
   turns: Turn[];
   sourceTabId?: number;
   onStatus?: (status: string) => void;
+  onTaskStatus?: (entry: {
+    id: string;
+    kind: ApiTaskKind;
+    status: ApiTaskStatus;
+    message: string;
+    progress: number;
+  }) => void | Promise<void>;
 };
 
 type TurnNodeData = {
@@ -47,8 +70,12 @@ type TurnNodeData = {
   isCustomNode?: boolean;
   status?: "open" | "review" | "done";
   tags?: string[];
+  color?: NodeColorName;
+  collapsed?: boolean;
+  important?: boolean;
   onUpdate?: (nodeId: string, updates: { title?: string; summary?: string }) => void;
   onSummarize?: (nodeId: string) => void;
+  onJump?: (nodeId: string) => void;
   isSummarizing?: boolean;
 };
 
@@ -59,6 +86,9 @@ type CustomNodeRecord = {
   summary: string;
   status?: "open" | "review" | "done";
   tags?: string[];
+  color?: NodeColorName;
+  collapsed?: boolean;
+  important?: boolean;
 };
 
 type GraphSnapshot = {
@@ -106,6 +136,9 @@ type ExportedGraph = {
     summary?: string;
     status?: "open" | "review" | "done";
     tags?: string[];
+    color?: NodeColorName;
+    collapsed?: boolean;
+    important?: boolean;
     turnId?: string;
     isConversationRoot?: boolean;
   }>;
@@ -171,6 +204,50 @@ function titleFromTurn(turn: Turn): string {
 function summaryFromTurn(turn: Turn): string {
   const trimmed = turn.assistantText.trim();
   return trimmed.length > 160 ? `${trimmed.slice(0, 160)}...` : trimmed;
+}
+
+function isDefaultRootSummary(summary?: string): boolean {
+  return Boolean(summary?.trim().match(/^\d+\s+mapped turns$/i));
+}
+
+function isGenericConversationRootTitle(title?: string): boolean {
+  const normalized = title?.trim();
+  if (!normalized) return true;
+  return [
+    /^TurnMap$/i,
+    /^Current AI conversation$/i,
+    /^Current conversation$/i,
+    /^Agents$/i,
+    /^Intelligence$/i,
+    /^Projects$/i,
+    /^Chats$/i,
+    /^Upgrade(?: to Pro)?$/i,
+    /^Qwen$/i,
+    /^Qwen Studio$/i,
+    /^Qwen(?:\d+(?:\.\d+)*)?[-\s]*(?:Plus|Max|Turbo|Coder|VL|Omni|Instruct)$/i,
+    /^通义$/i,
+    /^通义千问$/i,
+    /^千问$/i,
+    /^Claude$/i,
+    /^智谱清言$/i,
+    /^ChatGLM$/i,
+    /^Z\.ai$/i,
+    /^GLM$/i,
+    /^Le Chat$/i,
+    /^Mistral$/i,
+    /^Mistral Le Chat$/i,
+    /^Arena$/i,
+    /^LMArena$/i,
+    /^Chatbot Arena$/i,
+    /^Arena AI: The Official AI Ranking & LLM Leaderboard$/i,
+    /批量操作|重命名|删除对话/,
+    /Official AI Ranking/i,
+    /LLM Leaderboard/i
+  ].some((pattern) => pattern.test(normalized));
+}
+
+function rootTitleFromOverride(overrideTitle: string | undefined, conversationTitle: string): string {
+  return overrideTitle && !isGenericConversationRootTitle(overrideTitle) ? overrideTitle : conversationTitle;
 }
 
 function nodeHasDefaultText(node: Node<TurnNodeData>): boolean {
@@ -253,9 +330,21 @@ function nodesFromTurns(
   conversationTitle: string,
   turns: Turn[],
   positions: Record<string, { x: number; y: number }>,
-  nodeOverrides: Record<string, { title?: string; summary?: string; status?: "open" | "review" | "done"; tags?: string[] }>,
+  nodeOverrides: Record<
+    string,
+    {
+      title?: string;
+      summary?: string;
+      status?: "open" | "review" | "done";
+      tags?: string[];
+      color?: NodeColorName;
+      collapsed?: boolean;
+      important?: boolean;
+    }
+  >,
   onUpdate: TurnNodeData["onUpdate"],
   onSummarize: TurnNodeData["onSummarize"],
+  onJump: TurnNodeData["onJump"],
   summarizingNodeIds: Set<string>,
   hiddenNodeIds: string[],
   customNodes: CustomNodeRecord[],
@@ -264,15 +353,23 @@ function nodesFromTurns(
 ): Node<TurnNodeData>[] {
   const layoutPositions = createLayoutPositions(turns, layoutMode);
   const rootOverride = nodeOverrides["conversation-root"];
+  const rootTitle = rootTitleFromOverride(rootOverride?.title, conversationTitle);
   const rootNode: Node<TurnNodeData> = {
     id: "conversation-root",
     type: "turnNode",
+    dragHandle: ".turn-node__drag-handle",
     position: positions["conversation-root"] ?? layoutPositions["conversation-root"],
     data: {
-      title: rootOverride?.title ?? conversationTitle,
-      summary: rootOverride?.summary ?? `${turns.length} mapped turns`,
+      title: rootTitle,
+      summary:
+        rootOverride?.summary && !isDefaultRootSummary(rootOverride.summary)
+          ? rootOverride.summary
+          : `${turns.length} mapped turns`,
       status: rootOverride?.status,
       tags: rootOverride?.tags,
+      color: rootOverride?.color,
+      collapsed: rootOverride?.collapsed,
+      important: rootOverride?.important,
       isConversationRoot: true,
       onUpdate
     }
@@ -282,27 +379,36 @@ function nodesFromTurns(
   const turnNodes = turns.filter((turn) => !hiddenNodeIdSet.has(turn.id)).map((turn, index) => ({
     id: turn.id,
     type: "turnNode",
+    dragHandle: ".turn-node__drag-handle",
     position: positions[turn.id] ?? layoutPositions[turn.id] ?? { x: 360, y: index * 190 },
     data: {
       title: nodeOverrides[turn.id]?.title ?? titleFromTurn(turn),
       summary: nodeOverrides[turn.id]?.summary ?? summaryFromTurn(turn),
       status: nodeOverrides[turn.id]?.status,
       tags: nodeOverrides[turn.id]?.tags,
+      color: nodeOverrides[turn.id]?.color,
+      collapsed: nodeOverrides[turn.id]?.collapsed,
+      important: nodeOverrides[turn.id]?.important,
       turn,
       onUpdate,
       onSummarize,
+      onJump,
       isSummarizing: summarizingNodeIds.has(turn.id)
     }
   }));
   const extraNodes: Node<TurnNodeData>[] = customNodes.map((node) => ({
     id: node.id,
     type: "turnNode",
+    dragHandle: ".turn-node__drag-handle",
     position: positions[node.id] ?? node.position,
     data: {
       title: nodeOverrides[node.id]?.title ?? node.title,
       summary: nodeOverrides[node.id]?.summary ?? node.summary,
       status: nodeOverrides[node.id]?.status ?? node.status,
       tags: nodeOverrides[node.id]?.tags ?? node.tags,
+      color: nodeOverrides[node.id]?.color ?? node.color,
+      collapsed: nodeOverrides[node.id]?.collapsed ?? node.collapsed,
+      important: nodeOverrides[node.id]?.important ?? node.important,
       isCustomNode: true,
       onUpdate
     }
@@ -403,26 +509,15 @@ function graphNodesMatchTurns(nodes: Node<TurnNodeData>[], turns: Turn[], hidden
 function relationshipStyle(relationship: EdgeRelationship, important = false): Edge["style"] {
   return {
     stroke: relationshipColor(relationship),
-    strokeWidth: important ? 3.5 : 1.8
+    strokeWidth: important ? 5.5 : 1.8
   };
 }
 
 function relationshipColor(relationship: EdgeRelationship): string {
-  const colors: Record<EdgeRelationship, string> = {
-    related: "#6b7280",
-    depends_on: "#7c3aed",
-    extends: "#2563eb",
-    supports: "#059669",
-    contradicts: "#dc2626",
-    duplicates: "#d97706",
-    references: "#94a3b8",
-    todo: "#be123c"
-  };
-
-  return colors[relationship];
+  return colorForRelationship(relationship);
 }
 
-function RelationshipTypeSelect({
+function RelationshipColorPicker({
   value,
   onChange
 }: {
@@ -431,19 +526,21 @@ function RelationshipTypeSelect({
 }) {
   const { t } = useI18n();
   return (
-    <div className="relationship-type-select">
-      <span
-        className="relationship-type-select__swatch"
-        style={{ backgroundColor: relationshipColor(value) }}
-        aria-hidden="true"
-      />
-      <select value={value} onChange={(event) => onChange(event.currentTarget.value as EdgeRelationship)}>
+    <div className="color-picker" aria-label={t("action.colorNode")}>
+      <span className="color-picker__title">{t("action.colorNode")}</span>
+      <div className="color-picker__row">
         {RELATIONSHIP_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {t(RELATIONSHIP_LABEL_KEYS[option.value])}
-          </option>
+          <button
+            key={option.value}
+            type="button"
+            className="color-swatch-button"
+            aria-pressed={value === option.value}
+            style={{ backgroundColor: relationshipColor(option.value) }}
+            title={t(RELATIONSHIP_LABEL_KEYS[option.value])}
+            onClick={() => onChange(option.value)}
+          />
         ))}
-      </select>
+      </div>
     </div>
   );
 }
@@ -464,7 +561,18 @@ function isAutoEdge(edge: Edge): boolean {
 
 function nodeOverridesFromNodes(
   nodes: Node<TurnNodeData>[]
-): Record<string, { title?: string; summary?: string; status?: "open" | "review" | "done"; tags?: string[] }> {
+): Record<
+  string,
+  {
+    title?: string;
+    summary?: string;
+    status?: "open" | "review" | "done";
+    tags?: string[];
+    color?: NodeColorName;
+    collapsed?: boolean;
+    important?: boolean;
+  }
+> {
   return Object.fromEntries(
     nodes.map((node) => [
       node.id,
@@ -472,7 +580,10 @@ function nodeOverridesFromNodes(
         title: typeof node.data?.title === "string" ? node.data.title : undefined,
         summary: typeof node.data?.summary === "string" ? node.data.summary : undefined,
         status: node.data.status,
-        tags: node.data.tags
+        tags: node.data.tags,
+        color: node.data.color,
+        collapsed: node.data.collapsed,
+        important: node.data.important
       }
     ])
   );
@@ -487,7 +598,10 @@ function customRecordsFromNodes(nodes: Node<TurnNodeData>[]): CustomNodeRecord[]
       title: node.data.title,
       summary: node.data.summary,
       status: node.data.status,
-      tags: node.data.tags
+      tags: node.data.tags,
+      color: node.data.color,
+      collapsed: node.data.collapsed,
+      important: node.data.important
     }));
 }
 
@@ -506,7 +620,7 @@ function edgeRelationship(edge: Edge): EdgeRelationship {
 
 function safeFilePart(value: string): string {
   const cleaned = value.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ");
-  return (cleaned || "chatmap").slice(0, 80);
+  return (cleaned || "turnmap").slice(0, 80);
 }
 
 function downloadTextFile(filename: string, text: string, mimeType: string): void {
@@ -660,11 +774,14 @@ function serializeGraph(
     nodes: nodes.map((node) => ({
       id: node.id,
       position: node.position,
-        title: node.data.title,
-        summary: node.data.summary,
-        status: node.data.status,
-        tags: node.data.tags,
-        turnId: node.data.turn?.id,
+      title: node.data.title,
+      summary: node.data.summary,
+      status: node.data.status,
+      tags: node.data.tags,
+      color: node.data.color,
+      collapsed: node.data.collapsed,
+      important: node.data.important,
+      turnId: node.data.turn?.id,
       isConversationRoot: Boolean(node.data.isConversationRoot)
     })),
     edges: edges.map((edge) => {
@@ -692,12 +809,26 @@ function graphToObsidianCanvas(
   nodes: Node<TurnNodeData>[],
   edges: Edge[]
 ): string {
+  const nodeText = (node: Node<TurnNodeData>): string => {
+    const metadata = [
+      node.data.turn ? `Turn: ${node.data.turn.turnIndex + 1}` : "",
+      node.data.status ? `Status: ${node.data.status}` : "",
+      node.data.tags?.length ? `Tags: ${node.data.tags.map((tag) => `#${tag}`).join(" ")}` : ""
+    ].filter(Boolean);
+
+    return [
+      node.data.isConversationRoot ? `# ${node.data.title}` : `## ${node.data.title}`,
+      node.data.summary,
+      metadata.length ? metadata.join("\n") : ""
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
   const canvasNodes = nodes.map((node) => ({
     id: node.id,
     type: "text",
-    text: node.data.isConversationRoot
-      ? `# ${node.data.title}\n\n${node.data.summary}`
-      : `## ${node.data.title}\n\n${node.data.summary}`,
+    text: nodeText(node),
     x: Math.round(node.position.x),
     y: Math.round(node.position.y),
     width: node.data.isConversationRoot ? 320 : 300,
@@ -706,13 +837,21 @@ function graphToObsidianCanvas(
 
   const canvasEdges = edges.map((edge) => {
     const relationship = edgeRelationship(edge);
+    const data = edge.data as RelationshipEdgeData | undefined;
     return {
       id: edge.id,
       fromNode: edge.source,
       fromSide: "right",
       toNode: edge.target,
       toSide: "left",
-      label: String(edge.label ?? relationship),
+      label: [
+        String(edge.label ?? relationship),
+        data?.important ? "important" : "",
+        typeof data?.confidence === "number" ? `${Math.round(data.confidence * 100)}%` : "",
+        data?.reason ? data.reason : ""
+      ]
+        .filter(Boolean)
+        .join(" | "),
       color: relationshipColor(relationship)
     };
   });
@@ -723,7 +862,7 @@ function graphToObsidianCanvas(
       edges: canvasEdges,
       metadata: {
         name: conversationTitle,
-        source: "ChatMap"
+        source: "TurnMap"
       }
     },
     null,
@@ -777,7 +916,7 @@ function graphToSvg(
       return `
     <path d="M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}" fill="none" stroke="${relationshipColor(
       relationship
-    )}" stroke-width="${data?.important ? 3.5 : 1.8}" marker-end="url(#arrow)" opacity="0.78" />
+    )}" stroke-width="${data?.important ? 5.5 : 1.8}" marker-end="url(#arrow)" opacity="0.78" />
     <text x="${midX}" y="${(y1 + y2) / 2 - 6}" class="edge-label">${escapeXml(label)}</text>`;
     })
     .join("");
@@ -861,7 +1000,7 @@ function graphToMarkdown(
 ): string {
   const titles = nodeTitleById(nodes);
   const turnNodes = nodes.filter((node) => !node.data.isConversationRoot);
-  const lines: string[] = [`# ${conversationTitle}`, "", `${turns.length} turns mapped by ChatMap.`, ""];
+  const lines: string[] = [`# ${conversationTitle}`, "", `${turns.length} turns mapped by TurnMap.`, ""];
 
   lines.push("## Nodes", "");
   turnNodes.forEach((node, index) => {
@@ -894,6 +1033,38 @@ function graphToMarkdown(
   return lines.join("\n");
 }
 
+function nodesForAdvancedExport(nodes: Node<TurnNodeData>[]): ExportNode[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    title: node.data.title,
+    summary: node.data.summary,
+    status: node.data.status,
+    tags: node.data.tags,
+    color: node.data.color,
+    collapsed: node.data.collapsed,
+    important: node.data.important,
+    turn: node.data.turn,
+    isConversationRoot: node.data.isConversationRoot,
+    position: node.position
+  }));
+}
+
+function edgesForAdvancedExport(edges: Edge[]): ExportEdge[] {
+  return edges.map((edge) => {
+    const data = edge.data as RelationshipEdgeData | undefined;
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      relationship: data?.relationship ?? (isAutoEdge(edge) ? "references" : "related"),
+      important: data?.important,
+      confidence: data?.confidence,
+      reason: data?.reason
+    };
+  });
+}
+
 function isLayoutMode(value: unknown): value is LayoutMode {
   return value === "single" || value === "radial" || value === "list" || value === "two-sided";
 }
@@ -914,12 +1085,12 @@ function isRelationship(value: unknown): value is EdgeRelationship {
 function parseImportedGraph(text: string): ExportedGraph {
   const value = JSON.parse(text) as unknown;
   if (!value || typeof value !== "object") {
-    throw new Error("Imported file is not a ChatMap JSON object.");
+    throw new Error("Imported file is not a TurnMap JSON object.");
   }
 
   const graph = value as ExportedGraph;
   if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
-    throw new Error("Imported file does not look like a ChatMap JSON export.");
+    throw new Error("Imported file does not look like a TurnMap JSON export.");
   }
 
   return graph;
@@ -953,7 +1124,10 @@ function overridesFromImportedGraph(
             node.status === "open" || node.status === "review" || node.status === "done"
               ? node.status
               : undefined,
-          tags: Array.isArray(node.tags) ? node.tags.filter((tag) => typeof tag === "string") : undefined
+          tags: Array.isArray(node.tags) ? node.tags.filter((tag) => typeof tag === "string") : undefined,
+          color: isNodeColorName(node.color) ? node.color : undefined,
+          collapsed: typeof node.collapsed === "boolean" ? node.collapsed : undefined,
+          important: typeof node.important === "boolean" ? node.important : undefined
         }
       ])
   );
@@ -972,7 +1146,10 @@ function customNodesFromImportedGraph(graph: ExportedGraph): CustomNodeRecord[] 
       summary: typeof node.summary === "string" ? node.summary : "",
       status:
         node.status === "open" || node.status === "review" || node.status === "done" ? node.status : undefined,
-      tags: Array.isArray(node.tags) ? node.tags.filter((tag) => typeof tag === "string") : undefined
+      tags: Array.isArray(node.tags) ? node.tags.filter((tag) => typeof tag === "string") : undefined,
+      color: isNodeColorName(node.color) ? node.color : undefined,
+      collapsed: typeof node.collapsed === "boolean" ? node.collapsed : undefined,
+      important: typeof node.important === "boolean" ? node.important : undefined
     }));
 }
 
@@ -1020,18 +1197,20 @@ function snapshotKey(snapshot: GraphSnapshot): string {
   });
 }
 
-export function ChatMapCanvas({
+export function TurnMapCanvas({
   conversationId,
   conversationTitle,
   turns,
   sourceTabId,
-  onStatus
-}: ChatMapCanvasProps) {
+  onStatus,
+  onTaskStatus
+}: TurnMapCanvasProps) {
   const { t } = useI18n();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<TurnNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedRoot, setSelectedRoot] = useState(false);
+  const [highlightedEndpointIds, setHighlightedEndpointIds] = useState<string[]>([]);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("single");
   const [hiddenRoot, setHiddenRoot] = useState(false);
   const [hiddenAutoEdgeIds, setHiddenAutoEdgeIds] = useState<string[]>([]);
@@ -1077,6 +1256,15 @@ export function ChatMapCanvas({
       )
       .slice(0, 30);
   }, [nodes, searchQuery]);
+  const renderedNodes = useMemo<Node<TurnNodeData>[]>(() => {
+    const highlighted = new Set(highlightedEndpointIds);
+    return nodes.map((node) => ({
+      ...node,
+      className: [node.className, highlighted.has(node.id) ? "is-endpoint-highlight" : ""]
+        .filter(Boolean)
+        .join(" ")
+    }));
+  }, [highlightedEndpointIds, nodes]);
   const currentSnapshot = useCallback(
     (): GraphSnapshot => {
       const snapshot = cloneSnapshot({
@@ -1129,6 +1317,42 @@ export function ChatMapCanvas({
     [setNodes]
   );
 
+  const reportApiTask = useCallback(
+    (entry: {
+      id: string;
+      kind: ApiTaskKind;
+      status: ApiTaskStatus;
+      message: string;
+      progress: number;
+    }) => {
+      onStatus?.(entry.message);
+      void onTaskStatus?.(entry);
+    },
+    [onStatus, onTaskStatus]
+  );
+
+  const jumpToNodeTurn = useCallback(
+    async (nodeId: string) => {
+      const turn = turns.find((candidate) => candidate.id === nodeId);
+      if (!turn) return;
+
+      const requestId = (jumpRequestId.current += 1);
+      const result = await jumpToTurnInActiveTab(
+        {
+          type: "TURNMAP_JUMP_TO_TURN",
+          anchor: turn.sourceAnchor
+        },
+        sourceTabId
+      );
+
+      if (requestId !== jumpRequestId.current) return;
+      if (!result.ok) {
+        onStatus?.(result.reason ?? "Jump failed.");
+      }
+    },
+    [onStatus, sourceTabId, turns]
+  );
+
   const focusNode = useCallback(
     (nodeId: string) => {
       const node = nodes.find((candidate) => candidate.id === nodeId);
@@ -1173,7 +1397,14 @@ export function ChatMapCanvas({
       if (!turn) return;
 
       setSummarizingNodeIds((currentIds) => new Set(currentIds).add(nodeId));
-      onStatus?.(`Summarizing turn ${turn.turnIndex + 1}...`);
+      const taskId = `summarize-${conversationId}-${nodeId}`;
+      reportApiTask({
+        id: taskId,
+        kind: "summarize",
+        status: "running",
+        message: t("task.summarizeOne", { current: turn.turnIndex + 1 }),
+        progress: 5
+      });
 
       try {
         const summary = await summarizeTurn(turn);
@@ -1191,9 +1422,21 @@ export function ChatMapCanvas({
               : node
           )
         );
-        onStatus?.(`Turn ${turn.turnIndex + 1} summarized`);
+        reportApiTask({
+          id: taskId,
+          kind: "summarize",
+          status: "success",
+          message: t("task.summarizeOneDone", { current: turn.turnIndex + 1 }),
+          progress: 100
+        });
       } catch (error) {
-        onStatus?.(error instanceof Error ? error.message : "AI node summary failed.");
+        reportApiTask({
+          id: taskId,
+          kind: "summarize",
+          status: "error",
+          message: error instanceof Error ? error.message : t("task.summarizeFailed"),
+          progress: 100
+        });
       } finally {
         setSummarizingNodeIds((currentIds) => {
           const nextIds = new Set(currentIds);
@@ -1202,7 +1445,7 @@ export function ChatMapCanvas({
         });
       }
     },
-    [onStatus, setNodes, turns]
+    [conversationId, reportApiTask, setNodes, t, turns]
   );
 
   const summarizeAllNodes = useCallback(async () => {
@@ -1210,7 +1453,14 @@ export function ChatMapCanvas({
     if (turns.length === 0) return;
 
     setSummarizingNodeIds(new Set(turns.map((turn) => turn.id)));
-    onStatus?.(`Summarizing ${turns.length} turns...`);
+    const taskId = `summarize-all-${conversationId}`;
+    reportApiTask({
+      id: taskId,
+      kind: "summarize",
+      status: "running",
+      message: t("task.summarizeAll", { total: turns.length }),
+      progress: 0
+    });
     let completed = 0;
     let failed = false;
 
@@ -1232,8 +1482,21 @@ export function ChatMapCanvas({
           )
         );
         completed += 1;
+        reportApiTask({
+          id: taskId,
+          kind: "summarize",
+          status: "running",
+          message: t("task.summarizeProgress", { current: completed, total: turns.length }),
+          progress: Math.round((completed / turns.length) * 100)
+        });
       } catch (error) {
-        onStatus?.(error instanceof Error ? error.message : "AI batch summary failed.");
+        reportApiTask({
+          id: taskId,
+          kind: "summarize",
+          status: "error",
+          message: error instanceof Error ? error.message : t("task.summarizeFailed"),
+          progress: Math.round((completed / turns.length) * 100)
+        });
         failed = true;
         break;
       } finally {
@@ -1246,9 +1509,15 @@ export function ChatMapCanvas({
     }
 
     if (!failed) {
-      onStatus?.(`Batch summary finished: ${completed} turns updated`);
+      reportApiTask({
+        id: taskId,
+        kind: "summarize",
+        status: "success",
+        message: t("task.summarizeAllDone", { total: completed }),
+        progress: 100
+      });
     }
-  }, [onStatus, setNodes, summarizingNodeIds.size, turns]);
+  }, [conversationId, reportApiTask, setNodes, summarizingNodeIds.size, t, turns]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1295,6 +1564,7 @@ export function ChatMapCanvas({
         storedGraph.nodeOverrides,
         updateNodeText,
         summarizeNode,
+        jumpToNodeTurn,
         new Set(),
         activeHiddenNodeIds,
         storedGraph.customNodes ?? [],
@@ -1330,6 +1600,7 @@ export function ChatMapCanvas({
     setEdges,
     setNodes,
     summarizeNode,
+    jumpToNodeTurn,
     turns,
     updateNodeText
   ]);
@@ -1368,11 +1639,12 @@ export function ChatMapCanvas({
         data: {
           ...node.data,
           onSummarize: summarizeNode,
+          onJump: jumpToNodeTurn,
           isSummarizing: summarizingNodeIds.has(node.id)
         }
       }))
     );
-  }, [setNodes, summarizeNode, summarizingNodeIds]);
+  }, [jumpToNodeTurn, setNodes, summarizeNode, summarizingNodeIds]);
 
   useEffect(() => {
     if (nodes.length === 0) return;
@@ -1416,7 +1688,15 @@ export function ChatMapCanvas({
     let cancelled = false;
 
     void (async () => {
-      onStatus?.(`Auto summarizing ${candidates.length} default nodes...`);
+      const taskId = `auto-summarize-${conversationId}`;
+      let completed = 0;
+      reportApiTask({
+        id: taskId,
+        kind: "summarize",
+        status: "running",
+        message: t("task.autoSummarize", { total: candidates.length }),
+        progress: 0
+      });
 
       for (const node of candidates) {
         if (cancelled || !node.data.turn) break;
@@ -1439,8 +1719,22 @@ export function ChatMapCanvas({
               };
             })
           );
+          completed += 1;
+          reportApiTask({
+            id: taskId,
+            kind: "summarize",
+            status: "running",
+            message: t("task.summarizeProgress", { current: completed, total: candidates.length }),
+            progress: Math.round((completed / candidates.length) * 100)
+          });
         } catch (error) {
-          onStatus?.(error instanceof Error ? error.message : "Auto summarize failed.");
+          reportApiTask({
+            id: taskId,
+            kind: "summarize",
+            status: "error",
+            message: error instanceof Error ? error.message : t("task.autoSummarizeFailed"),
+            progress: Math.round((completed / candidates.length) * 100)
+          });
           break;
         } finally {
           setSummarizingNodeIds((currentIds) => {
@@ -1452,7 +1746,13 @@ export function ChatMapCanvas({
       }
 
       if (!cancelled) {
-        onStatus?.("Auto summarize finished");
+        reportApiTask({
+          id: taskId,
+          kind: "summarize",
+          status: "success",
+          message: t("task.autoSummarizeDone", { total: completed }),
+          progress: 100
+        });
       }
       autoSummarizeRunning.current = false;
     })();
@@ -1461,7 +1761,7 @@ export function ChatMapCanvas({
       cancelled = true;
       autoSummarizeRunning.current = false;
     };
-  }, [autoSummarize, conversationId, nodes.length, onStatus, setNodes]);
+  }, [autoSummarize, conversationId, nodes.length, reportApiTask, setNodes, t]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -1486,11 +1786,25 @@ export function ChatMapCanvas({
   );
 
   const onEdgeClick = useCallback<EdgeMouseHandler>(
-    (_event, edge) => {
+    (event, edge) => {
+      event.stopPropagation();
       setSelectedRoot(false);
       setSelectedEdgeId(edge.id);
+      setHighlightedEndpointIds([]);
     },
     []
+  );
+
+  const onEdgeContextMenu = useCallback<EdgeMouseHandler>(
+    (event, edge) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedRoot(false);
+      setSelectedEdgeId(edge.id);
+      setHighlightedEndpointIds([edge.source, edge.target]);
+      onStatus?.("Highlighted linked nodes");
+    },
+    [onStatus]
   );
 
   const updateSelectedEdge = useCallback(
@@ -1532,26 +1846,38 @@ export function ChatMapCanvas({
     [selectedEdge, selectedEdgeId, setEdges]
   );
 
-  const onNodeClick = useCallback(async (_event: React.MouseEvent, node: Node<TurnNodeData>) => {
-    if (node.data.isConversationRoot) {
-      setSelectedRoot(true);
+  const onNodeClick = useCallback(
+    (event: React.MouseEvent, node: Node<TurnNodeData>) => {
+      const multiSelect = event.ctrlKey || event.metaKey || event.shiftKey;
       setSelectedEdgeId(null);
-      return;
-    }
+      setHighlightedEndpointIds([]);
 
-    if (!node.data.turn) return;
+      if (node.data.isConversationRoot) {
+        setSelectedRoot(true);
+        setNodes((currentNodes) =>
+          currentNodes.map((candidate) => ({
+            ...candidate,
+            selected: candidate.id === node.id
+          }))
+        );
+        return;
+      }
 
-    const requestId = (jumpRequestId.current += 1);
-    const result = await jumpToTurnInActiveTab({
-      type: "CHATMAP_JUMP_TO_TURN",
-      anchor: node.data.turn.sourceAnchor
-    }, sourceTabId);
-
-    if (requestId !== jumpRequestId.current) return;
-    if (!result.ok) {
-      onStatus?.(result.reason ?? "Jump failed.");
-    }
-  }, [onStatus, sourceTabId]);
+      setSelectedRoot(false);
+      setNodes((currentNodes) =>
+        currentNodes.map((candidate) => {
+          if (candidate.id !== node.id) {
+            return multiSelect ? candidate : { ...candidate, selected: false };
+          }
+          return {
+            ...candidate,
+            selected: multiSelect ? !candidate.selected : true
+          };
+        })
+      );
+    },
+    [setNodes]
+  );
 
   const deleteSelectedEdge = useCallback(() => {
     if (!selectedEdge) return;
@@ -1635,6 +1961,67 @@ export function ChatMapCanvas({
     setSelectedRoot(false);
     onStatus?.(`Merged ${sortedNodes.length} nodes`);
   }, [onStatus, selectedTurnNodes, setEdges, setNodes, updateNodeText]);
+
+  const collapseSelectedAsTopic = useCallback(() => {
+    if (selectedTurnNodes.length < 2) return;
+
+    const topic = buildCollapsedTopic({
+      selectedNodes: selectedTurnNodes.map((node) => ({
+        id: node.id,
+        title: node.data.title,
+        summary: node.data.summary,
+        position: node.position,
+        turnIndex: node.data.turn?.turnIndex
+      }))
+    });
+    const sourceIds = new Set(topic.hiddenNodeIds);
+    const hasRoot = nodes.some((node) => node.id === "conversation-root");
+
+    setHiddenNodeIds((currentIds) => [...new Set([...currentIds, ...topic.hiddenNodeIds])]);
+    setNodes((currentNodes) => [
+      ...currentNodes
+        .filter((node) => !sourceIds.has(node.id))
+        .map((node) => ({ ...node, selected: false })),
+      {
+        id: topic.id,
+        type: "turnNode",
+        position: topic.position,
+        selected: true,
+        data: {
+          title: topic.title,
+          summary: topic.summary,
+          isCustomNode: true,
+          status: "review",
+          tags: topic.tags,
+          onUpdate: updateNodeText
+        }
+      }
+    ]);
+    setEdges((currentEdges) => {
+      const keptEdges = currentEdges.filter(
+        (edge) => !sourceIds.has(edge.source) && !sourceIds.has(edge.target)
+      );
+      if (!hasRoot || hiddenRoot) return keptEdges.map(applyEdgeStyle);
+      return [
+        ...keptEdges,
+        applyEdgeStyle({
+          id: `user-conversation-root-${topic.id}`,
+          source: "conversation-root",
+          target: topic.id,
+          label: "topic",
+          data: {
+            relationship: "references",
+            important: true,
+            createdBy: "user",
+            reason: "Collapsed topic group"
+          } satisfies RelationshipEdgeData
+        })
+      ];
+    });
+    setSelectedEdgeId(null);
+    setSelectedRoot(false);
+    onStatus?.(`Collapsed ${topic.hiddenNodeIds.length} turns into a topic`);
+  }, [hiddenRoot, nodes, onStatus, selectedTurnNodes, setEdges, setNodes, updateNodeText]);
 
   const duplicateSelectedNodeAsNote = useCallback(() => {
     const sourceNode = selectedTurnNodes[0];
@@ -1775,6 +2162,41 @@ export function ChatMapCanvas({
     onStatus?.(`Tagged ${selectedTurnNodes.length} nodes`);
   }, [onStatus, selectedTurnNodes, setNodes]);
 
+  const updateSelectedNodeAppearance = useCallback(
+    (updates: Pick<Partial<TurnNodeData>, "color" | "collapsed" | "important">) => {
+      if (selectedTurnNodes.length === 0) return;
+      const selectedIds = new Set(selectedTurnNodes.map((node) => node.id));
+      setNodes((currentNodes) =>
+        currentNodes.map((node) =>
+          selectedIds.has(node.id)
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  ...updates
+                }
+              }
+            : node
+        )
+      );
+    },
+    [selectedTurnNodes, setNodes]
+  );
+
+  const toggleSelectedNodeCollapsed = useCallback(() => {
+    if (selectedTurnNodes.length === 0) return;
+    const shouldCollapse = selectedTurnNodes.some((node) => !node.data.collapsed);
+    updateSelectedNodeAppearance({ collapsed: shouldCollapse });
+    onStatus?.(shouldCollapse ? t("status.nodesCollapsed") : t("status.nodesExpanded"));
+  }, [onStatus, selectedTurnNodes, t, updateSelectedNodeAppearance]);
+
+  const toggleSelectedNodeImportant = useCallback(() => {
+    if (selectedTurnNodes.length === 0) return;
+    const important = selectedTurnNodes.some((node) => !node.data.important);
+    updateSelectedNodeAppearance({ important });
+    onStatus?.(important ? t("status.nodesImportant") : t("status.nodesNormal"));
+  }, [onStatus, selectedTurnNodes, t, updateSelectedNodeAppearance]);
+
   const convertSelectedEdgeToNote = useCallback(() => {
     if (!selectedEdge) return;
     const sourceTitle = shortNodeTitle(nodes, selectedEdge.source);
@@ -1832,9 +2254,16 @@ export function ChatMapCanvas({
   }, [nodes, onStatus, selectedEdge, setEdges, setNodes, updateNodeText]);
 
   const suggestLinks = useCallback(async () => {
+    const taskId = `suggest-links-${conversationId}`;
     try {
       setSuggestingLinks(true);
-      onStatus?.("Asking AI to suggest semantic links...");
+      reportApiTask({
+        id: taskId,
+        kind: "suggest-links",
+        status: "running",
+        message: t("task.suggestLinks"),
+        progress: 15
+      });
       const suggestedEdges = (await suggestSemanticEdges(nodes)).map(applyEdgeStyle);
       const existingPairs = new Set([
         ...edges.map((edge) => `${edge.source}:${edge.target}`),
@@ -1844,13 +2273,25 @@ export function ChatMapCanvas({
         (edge) => !existingPairs.has(`${edge.source}:${edge.target}`)
       );
       setPendingSuggestedEdges((currentEdges) => [...currentEdges, ...uniqueSuggestions]);
-      onStatus?.(`${uniqueSuggestions.length} AI link suggestions ready for review`);
+      reportApiTask({
+        id: taskId,
+        kind: "suggest-links",
+        status: "success",
+        message: t("task.suggestLinksDone", { count: uniqueSuggestions.length }),
+        progress: 100
+      });
     } catch (error) {
-      onStatus?.(error instanceof Error ? error.message : "AI link suggestion failed.");
+      reportApiTask({
+        id: taskId,
+        kind: "suggest-links",
+        status: "error",
+        message: error instanceof Error ? error.message : t("task.suggestLinksFailed"),
+        progress: 100
+      });
     } finally {
       setSuggestingLinks(false);
     }
-  }, [edges, nodes, onStatus, pendingSuggestedEdges]);
+  }, [conversationId, edges, nodes, pendingSuggestedEdges, reportApiTask, t]);
 
   const updatePendingSuggestion = useCallback(
     (edgeId: string, updates: Partial<RelationshipEdgeData> & { label?: string }) => {
@@ -1917,7 +2358,7 @@ export function ChatMapCanvas({
   }, []);
 
   const exportJson = useCallback(() => {
-    const filename = `${safeFilePart(conversationTitle)}.chatmap.json`;
+    const filename = `${safeFilePart(conversationTitle)}.turnmap.json`;
     downloadTextFile(
       filename,
       serializeGraph(
@@ -1953,7 +2394,7 @@ export function ChatMapCanvas({
   );
 
   const exportMarkdown = useCallback(() => {
-    const filename = `${safeFilePart(conversationTitle)}.chatmap.md`;
+    const filename = `${safeFilePart(conversationTitle)}.turnmap.md`;
     downloadTextFile(filename, markdown, "text/markdown;charset=utf-8");
     onStatus?.(`Exported ${filename}`);
   }, [conversationTitle, markdown, onStatus]);
@@ -1977,14 +2418,35 @@ export function ChatMapCanvas({
     onStatus?.(`Exported ${filename}`);
   }, [conversationTitle, edges, nodes, onStatus]);
 
+  const exportOpml = useCallback(() => {
+    const filename = `${safeFilePart(conversationTitle)}.opml`;
+    downloadTextFile(
+      filename,
+      graphToOpml(conversationTitle, nodesForAdvancedExport(nodes), edgesForAdvancedExport(edges)),
+      "text/x-opml;charset=utf-8"
+    );
+    onStatus?.(t("file.exported", { filename }));
+  }, [conversationTitle, edges, nodes, onStatus, t]);
+
+  const exportObsidianVaultMarkdown = useCallback(() => {
+    const filename = `${safeFilePart(conversationTitle)}.obsidian-vault.zip`;
+    const files = graphToObsidianVaultMarkdownFiles(
+      conversationTitle,
+      nodesForAdvancedExport(nodes),
+      edgesForAdvancedExport(edges)
+    );
+    downloadBlobFile(filename, createZipFromTextFiles(files));
+    onStatus?.(t("file.exported", { filename }));
+  }, [conversationTitle, edges, nodes, onStatus, t]);
+
   const exportSvg = useCallback(() => {
-    const filename = `${safeFilePart(conversationTitle)}.chatmap.svg`;
+    const filename = `${safeFilePart(conversationTitle)}.turnmap.svg`;
     downloadTextFile(filename, graphToSvg(conversationTitle, nodes, edges), "image/svg+xml;charset=utf-8");
     onStatus?.(`Exported ${filename}`);
   }, [conversationTitle, edges, nodes, onStatus]);
 
   const exportPng = useCallback(async () => {
-    const filename = `${safeFilePart(conversationTitle)}.chatmap.png`;
+    const filename = `${safeFilePart(conversationTitle)}.turnmap.png`;
     try {
       const pngBlob = await svgToPngBlob(graphToSvg(conversationTitle, nodes, edges));
       downloadBlobFile(filename, pngBlob);
@@ -1995,7 +2457,7 @@ export function ChatMapCanvas({
   }, [conversationTitle, edges, nodes, onStatus]);
 
   const resetCurrentMap = useCallback(async () => {
-    const confirmed = window.confirm("Reset this ChatMap? This clears saved positions, edits, notes, hidden nodes, and links for the current conversation.");
+    const confirmed = window.confirm("Reset this TurnMap? This clears saved positions, edits, notes, hidden nodes, and links for the current conversation.");
     if (!confirmed) return;
 
     await resetStoredGraph(conversationId);
@@ -2012,6 +2474,7 @@ export function ChatMapCanvas({
       {},
       updateNodeText,
       summarizeNode,
+      jumpToNodeTurn,
       summarizingNodeIds,
       [],
       [],
@@ -2029,6 +2492,7 @@ export function ChatMapCanvas({
     setEdges,
     setNodes,
     summarizeNode,
+    jumpToNodeTurn,
     summarizingNodeIds,
     turns,
     updateNodeText
@@ -2080,6 +2544,7 @@ export function ChatMapCanvas({
           overrides,
           updateNodeText,
           summarizeNode,
+          jumpToNodeTurn,
           summarizingNodeIds,
           nextHiddenNodeIds,
           customNodes,
@@ -2132,9 +2597,9 @@ export function ChatMapCanvas({
           nextHiddenAutoEdgeIds,
           nextHiddenNodeIds
         );
-        onStatus?.(`Imported ChatMap JSON: ${nextNodes.length} nodes, ${importedUserEdges.length} user links`);
+        onStatus?.(`Imported TurnMap JSON: ${nextNodes.length} nodes, ${importedUserEdges.length} user links`);
       } catch (error) {
-        onStatus?.(error instanceof Error ? error.message : "ChatMap JSON import failed.");
+        onStatus?.(error instanceof Error ? error.message : "TurnMap JSON import failed.");
       }
     },
     [
@@ -2145,6 +2610,7 @@ export function ChatMapCanvas({
       setEdges,
       setNodes,
       summarizeNode,
+      jumpToNodeTurn,
       summarizingNodeIds,
       turns,
       updateNodeText
@@ -2163,6 +2629,7 @@ export function ChatMapCanvas({
           nodeOverridesFromNodes(currentNodes),
           updateNodeText,
           summarizeNode,
+          jumpToNodeTurn,
           summarizingNodeIds,
           hiddenNodeIds,
           customRecordsFromNodes(currentNodes),
@@ -2200,6 +2667,7 @@ export function ChatMapCanvas({
       setEdges,
       setNodes,
       summarizeNode,
+      jumpToNodeTurn,
       summarizingNodeIds,
       turns,
       updateNodeText
@@ -2210,7 +2678,7 @@ export function ChatMapCanvas({
     return (
       <section className="empty-state">
         <h2>No map yet</h2>
-        <p>Open a ChatGPT conversation with at least one complete answer.</p>
+        <p>Open a supported AI conversation with at least one complete answer.</p>
       </section>
     );
   }
@@ -2218,17 +2686,20 @@ export function ChatMapCanvas({
   return (
     <section className="canvas-shell">
       <ReactFlow
-        nodes={nodes}
+        nodes={renderedNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
+        onEdgeContextMenu={onEdgeContextMenu}
         onNodeClick={onNodeClick}
+        multiSelectionKeyCode={["Control", "Meta", "Shift"]}
         onPaneClick={() => {
           setSelectedEdgeId(null);
           setSelectedRoot(false);
+          setHighlightedEndpointIds([]);
           setFileMenuOpen(false);
         }}
         onInit={(instance) => {
@@ -2320,6 +2791,28 @@ export function ChatMapCanvas({
               >
                 <Icon name="map" />
                 <span>{t("file.exportCanvas")}</span>
+              </button>
+              <button
+                className="button-with-icon"
+                type="button"
+                onClick={() => {
+                  exportOpml();
+                  setFileMenuOpen(false);
+                }}
+              >
+                <Icon name="download" />
+                <span>{t("file.exportOpml")}</span>
+              </button>
+              <button
+                className="button-with-icon"
+                type="button"
+                onClick={() => {
+                  exportObsidianVaultMarkdown();
+                  setFileMenuOpen(false);
+                }}
+              >
+                <Icon name="download" />
+                <span>{t("file.exportObsidianVault")}</span>
               </button>
               <button
                 className="button-with-icon"
@@ -2440,7 +2933,7 @@ export function ChatMapCanvas({
                     <span>{shortNodeTitle(nodes, edge.target)}</span>
                   </div>
                   <div className="suggestion-item__controls">
-                    <RelationshipTypeSelect
+                    <RelationshipColorPicker
                       value={data.relationship}
                       onChange={(relationship) =>
                         updatePendingSuggestion(edge.id, {
@@ -2463,22 +2956,22 @@ export function ChatMapCanvas({
                         updatePendingSuggestion(edge.id, { important: event.currentTarget.checked })
                       }
                     />
-                    Important
+                    {t("action.important")}
                   </label>
                   {data.reason || typeof data.confidence === "number" ? (
                     <p>
                       {data.reason}
                       {typeof data.confidence === "number"
-                        ? ` Confidence ${Math.round(data.confidence * 100)}%`
+                        ? ` ${t("label.confidence")} ${Math.round(data.confidence * 100)}%`
                         : ""}
                     </p>
                   ) : null}
                   <div className="suggestion-item__actions">
                     <button type="button" onClick={() => acceptPendingSuggestion(edge.id)}>
-                      Accept
+                      {t("suggestions.accept")}
                     </button>
                     <button type="button" onClick={() => rejectPendingSuggestion(edge.id)}>
-                      Reject
+                      {t("suggestions.reject")}
                     </button>
                   </div>
                 </article>
@@ -2488,63 +2981,84 @@ export function ChatMapCanvas({
         </aside>
       ) : null}
       {selectedTurnNodes.length >= 2 ? (
-        <aside className="node-panel">
+        <aside className="edge-panel node-panel">
           <div className="edge-panel__header">
-            <strong>{selectedTurnNodes.length} Nodes Selected</strong>
+            <strong>{t("panel.nodesSelected").replace("{count}", String(selectedTurnNodes.length))}</strong>
           </div>
-          <p className="panel-note">Organize selected turns as notes or review groups.</p>
+          <p className="panel-note">{t("panel.organizeSelected")}</p>
           <div className="node-panel__actions">
             <button type="button" onClick={mergeSelectedNodes}>
-              Merge Nodes
+              {t("action.mergeNodes")}
+            </button>
+            <button type="button" onClick={collapseSelectedAsTopic}>
+              {t("action.collapseTopic")}
             </button>
             <button type="button" onClick={addBulkTag}>
-              Add Tag
+              {t("action.addTag")}
+            </button>
+            <button type="button" onClick={toggleSelectedNodeCollapsed}>
+              {selectedTurnNodes.some((node) => !node.data.collapsed) ? t("action.collapseNode") : t("action.expandNode")}
+            </button>
+            <button type="button" onClick={toggleSelectedNodeImportant}>
+              {t("action.important")}
             </button>
           </div>
-          <div className="node-panel__actions">
-            <button type="button" onClick={() => applyBulkStatus("open")}>
-              Open
-            </button>
-            <button type="button" onClick={() => applyBulkStatus("review")}>
-              Review
-            </button>
-            <button type="button" onClick={() => applyBulkStatus("done")}>
-              Done
+          <div className="color-picker" aria-label={t("action.colorNode")}>
+            <span className="color-picker__title">{t("action.colorNode")}</span>
+            <div className="color-picker__row">
+              {NODE_COLOR_OPTIONS.map((color) => (
+                <button
+                  key={color.name}
+                  type="button"
+                  className="color-swatch-button"
+                  style={{ backgroundColor: color.value }}
+                  title={t(`color.${color.name}` as I18nKey)}
+                  onClick={() => updateSelectedNodeAppearance({ color: color.name })}
+                />
+              ))}
+            </div>
+            <button type="button" onClick={() => updateSelectedNodeAppearance({ color: undefined })}>
+              {t("color.theme")}
             </button>
           </div>
         </aside>
       ) : null}
       {selectedTurnNodes.length === 1 ? (
-        <aside className="node-panel">
+        <aside className="edge-panel node-panel">
           <div className="edge-panel__header">
-            <strong>Node Actions</strong>
+            <strong>{t("panel.nodeActions")}</strong>
           </div>
-          <p className="panel-note">Create notes, split this turn, or start bulk organization.</p>
-          <div className="node-panel__actions">
-            <button type="button" onClick={duplicateSelectedNodeAsNote}>
-              Duplicate as Note
-            </button>
-            <button type="button" onClick={splitSelectedNode}>
-              Split Node
-            </button>
-          </div>
+          <p className="panel-note">{t("panel.nodeHint")}</p>
           <div className="node-panel__actions">
             <button type="button" onClick={selectAllTurnNodes}>
-              Select All Turns
+              {t("action.selectAllTurns")}
             </button>
             <button type="button" onClick={addBulkTag}>
-              Add Tag
+              {t("action.addTag")}
+            </button>
+            <button type="button" onClick={toggleSelectedNodeCollapsed}>
+              {selectedTurnNodes[0]?.data.collapsed ? t("action.expandNode") : t("action.collapseNode")}
+            </button>
+            <button type="button" onClick={toggleSelectedNodeImportant}>
+              {t("action.important")}
             </button>
           </div>
-          <div className="node-panel__actions">
-            <button type="button" onClick={() => applyBulkStatus("open")}>
-              Open
-            </button>
-            <button type="button" onClick={() => applyBulkStatus("review")}>
-              Review
-            </button>
-            <button type="button" onClick={() => applyBulkStatus("done")}>
-              Done
+          <div className="color-picker" aria-label={t("action.colorNode")}>
+            <span className="color-picker__title">{t("action.colorNode")}</span>
+            <div className="color-picker__row">
+              {NODE_COLOR_OPTIONS.map((color) => (
+                <button
+                  key={color.name}
+                  type="button"
+                  className="color-swatch-button"
+                  style={{ backgroundColor: color.value }}
+                  title={t(`color.${color.name}` as I18nKey)}
+                  onClick={() => updateSelectedNodeAppearance({ color: color.name })}
+                />
+              ))}
+            </div>
+            <button type="button" onClick={() => updateSelectedNodeAppearance({ color: undefined })}>
+              {t("color.theme")}
             </button>
           </div>
         </aside>
@@ -2552,23 +3066,22 @@ export function ChatMapCanvas({
       {selectedEdge ? (
         <aside className="edge-panel">
           <div className="edge-panel__header">
-            <strong>Link</strong>
+            <strong>{t("panel.linkTitle")}</strong>
             <button type="button" onClick={() => setSelectedEdgeId(null)}>
-              Close
+              {t("action.close")}
             </button>
           </div>
-          <label>
-            Type
-            <RelationshipTypeSelect
+          <div>
+            <RelationshipColorPicker
               value={
                 (selectedEdge.data as RelationshipEdgeData | undefined)?.relationship ??
                 (isAutoEdge(selectedEdge) ? "references" : "related")
               }
               onChange={(relationship) => updateSelectedEdge({ relationship })}
             />
-          </label>
+          </div>
           <label>
-            Label
+            {t("field.label")}
             <input
               value={String(selectedEdge.label ?? "")}
               onChange={(event) => updateSelectedEdge({ label: event.currentTarget.value })}
@@ -2580,38 +3093,35 @@ export function ChatMapCanvas({
               checked={Boolean((selectedEdge.data as RelationshipEdgeData | undefined)?.important)}
               onChange={(event) => updateSelectedEdge({ important: event.currentTarget.checked })}
             />
-            Important
+            {t("action.important")}
           </label>
           {((selectedEdge.data as RelationshipEdgeData | undefined)?.reason ||
             typeof (selectedEdge.data as RelationshipEdgeData | undefined)?.confidence === "number") ? (
             <p className="panel-note">
               {(selectedEdge.data as RelationshipEdgeData | undefined)?.reason}
               {typeof (selectedEdge.data as RelationshipEdgeData | undefined)?.confidence === "number"
-                ? ` Confidence ${Math.round(
+                ? ` ${t("label.confidence")} ${Math.round(
                     ((selectedEdge.data as RelationshipEdgeData | undefined)?.confidence ?? 0) * 100
                   )}%`
                 : ""}
             </p>
           ) : null}
-          <button type="button" onClick={convertSelectedEdgeToNote}>
-            Convert to Note
-          </button>
           <button type="button" className="danger-button" onClick={deleteSelectedEdge}>
-            Delete Link
+            {t("action.deleteLink")}
           </button>
         </aside>
       ) : null}
       {selectedRoot ? (
         <aside className="edge-panel">
           <div className="edge-panel__header">
-            <strong>Header</strong>
+            <strong>{t("panel.headerTitle")}</strong>
             <button type="button" onClick={() => setSelectedRoot(false)}>
-              Close
+              {t("action.close")}
             </button>
           </div>
-          <p className="panel-note">Double-click the header text to edit it.</p>
+          <p className="panel-note">{t("panel.headerHint")}</p>
           <button type="button" className="danger-button" onClick={deleteRoot}>
-            Delete Header
+            {t("action.deleteHeader")}
           </button>
         </aside>
       ) : null}

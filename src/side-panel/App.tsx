@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ExtractedTurnsMessage, Turn } from "../shared/types";
-import { isChatMapMessage, requestTurnsFromActiveTab, setFloatingPanelInTab } from "../shared/messaging";
+import { isTurnMapMessage, requestTurnsFromActiveTab, setFloatingPanelInTab } from "../shared/messaging";
 import { Icon } from "./components/Icon";
-import { ChatMapCanvas } from "./graph/ChatMapCanvas";
+import { buildDebugReport } from "./debug-report";
+import { TurnMapCanvas } from "./graph/TurnMapCanvas";
 import { useI18n } from "./i18n/useI18n";
 import { applyTheme, loadTheme, normalizeTheme, THEME_STORAGE_KEY } from "./settings/theme-storage";
+import { applyNodeColorRendering, loadUiSettings } from "./settings/ui-settings-storage";
 import { saveTurnsToIndexedDb } from "./storage/turn-storage";
+import {
+  buildApiTaskLogExport,
+  loadApiTaskLog,
+  recordApiTaskLog,
+  type ApiTaskKind,
+  type ApiTaskLogEntry,
+  type ApiTaskStatus
+} from "./task-log";
 
 type AppProps = {
   mode?: "side-panel" | "full-page";
@@ -18,6 +28,24 @@ function sourceTabIdFromUrl(): number | undefined {
   return Number.isFinite(tabId) ? tabId : undefined;
 }
 
+function safeFilePart(value: string): string {
+  return value
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80) || "turnmap";
+}
+
+function downloadTextFile(filename: string, content: string, type: string): void {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function App({ mode = "side-panel" }: AppProps) {
   const { t } = useI18n();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -28,6 +56,7 @@ export function App({ mode = "side-panel" }: AppProps) {
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [floatingEnabled, setFloatingEnabled] = useState(false);
   const [lastMessage, setLastMessage] = useState<ExtractedTurnsMessage | null>(null);
+  const [taskLog, setTaskLog] = useState<ApiTaskLogEntry[]>([]);
   const [sourceTabId, setSourceTabId] = useState<number | undefined>(() =>
     mode === "full-page" ? sourceTabIdFromUrl() : undefined
   );
@@ -37,6 +66,10 @@ export function App({ mode = "side-panel" }: AppProps) {
     setTurns(message.turns);
     setConversationId(message.conversationId);
     setConversationTitle(message.conversationTitle);
+    if (message.site?.id === "unsupported") {
+      setStatus(t("app.status.openConversation"));
+      return;
+    }
     void saveTurnsToIndexedDb(message.conversationId, message.conversationTitle, message.turns).catch(() => {
       setStatus(t("app.status.cacheFailed"));
     });
@@ -53,7 +86,7 @@ export function App({ mode = "side-panel" }: AppProps) {
   const refreshTurns = useCallback(async () => {
     setStatus(t("app.status.reading"));
     const message = await requestTurnsFromActiveTab({ ensureFull: true, tabId: sourceTabId });
-    if (message?.type === "CHATMAP_TURNS_UPDATED") {
+    if (message?.type === "TURNMAP_TURNS_UPDATED") {
       applyTurnsMessage(message);
     } else {
       setStatus(t("app.status.openConversation"));
@@ -63,7 +96,7 @@ export function App({ mode = "side-panel" }: AppProps) {
   const deepScanTurns = useCallback(async () => {
     setStatus(t("app.status.deepScanning"));
     const message = await requestTurnsFromActiveTab({ harvest: true, tabId: sourceTabId });
-    if (message?.type === "CHATMAP_TURNS_UPDATED") {
+    if (message?.type === "TURNMAP_TURNS_UPDATED") {
       applyTurnsMessage(message);
     } else {
       setStatus(t("app.status.deepScanFailed"));
@@ -88,7 +121,7 @@ export function App({ mode = "side-panel" }: AppProps) {
     const ok = await setFloatingPanelInTab(nextEnabled, sourceTabId);
     if (ok) {
       setFloatingEnabled(nextEnabled);
-      await chrome.storage.local.set({ "chatmap.floatingPanel.enabled": nextEnabled });
+      await chrome.storage.local.set({ "turnmap.floatingPanel.enabled": nextEnabled });
       setStatus(t(nextEnabled ? "app.status.floatEnabled" : "app.status.floatDisabled"));
       setViewMenuOpen(false);
     } else {
@@ -100,10 +133,59 @@ export function App({ mode = "side-panel" }: AppProps) {
     await chrome.runtime.openOptionsPage();
   }, []);
 
-  useEffect(() => {
-    void chrome.storage.local.get("chatmap.floatingPanel.enabled").then((result) => {
-      setFloatingEnabled(Boolean(result["chatmap.floatingPanel.enabled"]));
+  const exportDebugReport = useCallback(() => {
+    const report = buildDebugReport({
+      conversationTitle,
+      conversationId,
+      lastMessage,
+      mode,
+      sourceTabId,
+      status,
+      userAgent: navigator.userAgent,
+      extensionVersion: chrome.runtime.getManifest().version,
+      taskLog
     });
+    const filename = `${safeFilePart(conversationTitle)}.turnmap-debug.md`;
+    downloadTextFile(filename, report, "text/markdown;charset=utf-8");
+    setStatus(`Exported ${filename}`);
+  }, [conversationId, conversationTitle, lastMessage, mode, sourceTabId, status, taskLog]);
+
+  const exportTaskLog = useCallback(() => {
+    const filename = `${safeFilePart(conversationTitle)}.turnmap-task-log.json`;
+    const payload = buildApiTaskLogExport(taskLog);
+    downloadTextFile(filename, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+    setStatus(t("debug.exportTaskLogDone", { filename }));
+  }, [conversationTitle, taskLog, t]);
+
+  const reportTaskStatus = useCallback(
+    async (entry: {
+      id: string;
+      kind: ApiTaskKind;
+      status: ApiTaskStatus;
+      message: string;
+      progress: number;
+    }) => {
+      setStatus(entry.message);
+      const nextLog = await recordApiTaskLog(entry);
+      setTaskLog(nextLog);
+    },
+    []
+  );
+
+  useEffect(() => {
+    void chrome.storage.local.get("turnmap.floatingPanel.enabled").then((result) => {
+      setFloatingEnabled(Boolean(result["turnmap.floatingPanel.enabled"]));
+    });
+    void loadApiTaskLog().then(setTaskLog);
+    void loadUiSettings().then(applyNodeColorRendering);
+  }, []);
+
+  useEffect(() => {
+    const listener = () => {
+      void loadUiSettings().then(applyNodeColorRendering);
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
 
   useEffect(() => {
@@ -139,8 +221,8 @@ export function App({ mode = "side-panel" }: AppProps) {
     void refreshTurns();
 
     const listener = (message: unknown) => {
-      if (!isChatMapMessage(message)) return;
-      if (message.type === "CHATMAP_TURNS_UPDATED") {
+      if (!isTurnMapMessage(message)) return;
+      if (message.type === "TURNMAP_TURNS_UPDATED") {
         applyTurnsMessage(message as ExtractedTurnsMessage);
       }
     };
@@ -150,6 +232,7 @@ export function App({ mode = "side-panel" }: AppProps) {
   }, [applyTurnsMessage, refreshTurns]);
 
   const hasTurns = turns.length > 0;
+  const siteName = lastMessage?.site?.displayName ?? "unknown";
   const subtitle = useMemo(
     () => (hasTurns ? t("app.subtitle.hasTurns") : t("app.subtitle.noTurns")),
     [hasTurns, t]
@@ -164,7 +247,7 @@ export function App({ mode = "side-panel" }: AppProps) {
           </div>
           <div>
             <div className="app-kicker">{t("app.kicker")}</div>
-            <h1>ChatMap</h1>
+            <h1>TurnMap</h1>
             <p>{subtitle}</p>
           </div>
         </div>
@@ -195,11 +278,11 @@ export function App({ mode = "side-panel" }: AppProps) {
               <div className="view-menu__panel">
                 <button className="button-with-icon" type="button" disabled={mode === "side-panel"}>
                   <Icon name="panel" />
-                  <span>{t("app.view.sidePanel")}{mode === "side-panel" ? ` · ${t("app.view.current")}` : ""}</span>
+                  <span>{t("app.view.sidePanel")}{mode === "side-panel" ? ` 路 ${t("app.view.current")}` : ""}</span>
                 </button>
                 <button className="button-with-icon" type="button" onClick={openFullPage} disabled={mode === "full-page"}>
                   <Icon name="maximize" />
-                  <span>{t("app.view.fullPage")}{mode === "full-page" ? ` · ${t("app.view.current")}` : ""}</span>
+                  <span>{t("app.view.fullPage")}{mode === "full-page" ? ` 路 ${t("app.view.current")}` : ""}</span>
                 </button>
                 <button className="button-with-icon" type="button" onClick={toggleFloatingPanel}>
                   <Icon name="float" />
@@ -215,20 +298,31 @@ export function App({ mode = "side-panel" }: AppProps) {
       {debugOpen ? (
         <section className="debug-panel">
           <span>{t("debug.conversation")}: {conversationTitle}</span>
+          <span>{t("debug.site")}: {siteName}</span>
           <span>{t("debug.id")}: {conversationId}</span>
           <span>{t("debug.turns")}: {turns.length}</span>
           <span>{t("debug.source")}: {lastMessage?.harvestMeta?.source ?? "unknown"}</span>
           <span>{t("debug.steps")}: {lastMessage?.harvestMeta?.scannedSteps ?? 0}</span>
           <span>{t("debug.scroll")}: {lastMessage?.harvestMeta?.scrollContainer ?? "n/a"}</span>
+          <span>{t("debug.apiTasks")}: {taskLog.length}</span>
+          <button className="button-with-icon debug-panel__button" type="button" onClick={exportDebugReport}>
+            <Icon name="download" />
+            <span>{t("debug.exportReport")}</span>
+          </button>
+          <button className="button-with-icon debug-panel__button" type="button" onClick={exportTaskLog}>
+            <Icon name="download" />
+            <span>{t("debug.exportTaskLog")}</span>
+          </button>
         </section>
       ) : null}
 
-      <ChatMapCanvas
+      <TurnMapCanvas
         conversationId={conversationId}
         conversationTitle={conversationTitle}
         turns={turns}
         sourceTabId={sourceTabId}
         onStatus={setStatus}
+        onTaskStatus={reportTaskStatus}
       />
     </main>
   );

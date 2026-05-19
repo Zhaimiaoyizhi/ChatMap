@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+﻿import type { ReactElement } from "react";
 
 export type IconName =
   | "brain"
@@ -44,7 +44,7 @@ export function Icon({
   return (
     <svg
       aria-hidden={decorative ? "true" : undefined}
-      className={`chatmap-icon ${className}`.trim()}
+      className={`turnmap-icon ${className}`.trim()}
       fill="none"
       height={size}
       role={decorative ? undefined : "img"}

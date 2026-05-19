@@ -1,8 +1,8 @@
-# ChatMap User Guide
+﻿# TurnMap User Guide
 
-ChatMap turns the current ChatGPT conversation into an editable map.
+TurnMap turns the current ChatGPT conversation into an editable map.
 
-## Opening ChatMap
+## Opening TurnMap
 
 Current views:
 
@@ -13,13 +13,13 @@ Current views:
 
 Launcher behavior:
 
-- Left-click opens ChatMap.
-- Right-click opens ChatMap settings.
+- Left-click opens TurnMap.
+- Right-click opens TurnMap settings.
 - Drag moves the launcher; the position is saved locally.
 
 ## Settings
 
-ChatMap has a dedicated settings page for global settings:
+TurnMap has a dedicated settings page for global settings:
 
 - AI provider, model, API key, and auto summarize.
 - Default layout.
@@ -29,7 +29,7 @@ ChatMap has a dedicated settings page for global settings:
 
 ## Refreshing A Conversation
 
-Use Refresh to read the current ChatGPT conversation. ChatMap tries several extraction methods and falls back to deep scanning when needed.
+Use Refresh to read the current ChatGPT conversation. TurnMap tries several extraction methods and falls back to deep scanning when needed.
 
 ## Editing The Map
 
@@ -56,13 +56,13 @@ AI features send selected conversation text to the configured provider.
 
 Supported formats:
 
-- ChatMap JSON
+- TurnMap JSON
 - Obsidian Canvas
 - Markdown
 - SVG
 - PNG
 
-Use ChatMap JSON when you want to restore and continue editing a map.
+Use TurnMap JSON when you want to restore and continue editing a map.
 
 ## Updates
 

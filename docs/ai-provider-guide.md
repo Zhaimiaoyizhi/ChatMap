@@ -1,10 +1,10 @@
-# ChatMap AI Provider Guide
+﻿# TurnMap AI Provider Guide
 
-ChatMap uses an OpenAI-compatible Chat Completions API.
+TurnMap uses an OpenAI-compatible Chat Completions API.
 
 ## Required Endpoint
 
-ChatMap sends requests to:
+TurnMap sends requests to:
 
 ```text
 <baseUrl>/chat/completions
@@ -24,7 +24,7 @@ The provider should accept:
 }
 ```
 
-For JSON-producing tasks, ChatMap may also send:
+For JSON-producing tasks, TurnMap may also send:
 
 ```json
 {
@@ -32,7 +32,7 @@ For JSON-producing tasks, ChatMap may also send:
 }
 ```
 
-If a provider rejects `response_format`, ChatMap retries without it.
+If a provider rejects `response_format`, TurnMap retries without it.
 
 ## Expected Response
 
@@ -50,7 +50,7 @@ Preferred response shape:
 }
 ```
 
-ChatMap can also read a wide range of compatible response shapes, but
+TurnMap can also read a wide range of compatible response shapes, but
 `choices[0].message.content` is recommended.
 
 Accepted response sources include:
@@ -65,7 +65,7 @@ Accepted response sources include:
 - Common proxy/local fields: `text`, `response`, `message.content`, and `candidates[].content.parts[].text`
 
 Empty strings are ignored. If `response_format` produces an empty or unreadable
-body, ChatMap retries once without `response_format`.
+body, TurnMap retries once without `response_format`.
 
 ## Summarize Output
 

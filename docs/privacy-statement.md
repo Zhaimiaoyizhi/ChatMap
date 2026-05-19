@@ -1,10 +1,10 @@
-# ChatMap Privacy Statement
+﻿# TurnMap Privacy Statement
 
-ChatMap is an Edge extension that helps turn the current ChatGPT conversation into an editable map.
+TurnMap is an Edge extension that helps turn the current ChatGPT conversation into an editable map.
 
 ## Local Data
 
-ChatMap stores map data in the browser's extension storage:
+TurnMap stores map data in the browser's extension storage:
 
 - Conversation id and title
 - Extracted question-answer turns
@@ -20,9 +20,9 @@ This data stays in the local browser profile unless the user exports it or uses 
 
 ## AI Provider Data
 
-ChatMap does not call an AI provider automatically unless the user enables auto summarize.
+TurnMap does not call an AI provider automatically unless the user enables auto summarize.
 
-When the user runs AI features, ChatMap sends the relevant node text, summaries, and map context to the configured provider:
+When the user runs AI features, TurnMap sends the relevant node text, summaries, and map context to the configured provider:
 
 - OpenAI
 - DeepSeek
@@ -32,13 +32,13 @@ The provider receives the text needed for the requested feature, such as node su
 
 ## ChatGPT Access
 
-ChatMap reads the active ChatGPT conversation page and, when possible, the ChatGPT conversation backend API using the user's existing ChatGPT session. This is used only to build the current conversation map.
+TurnMap reads the active ChatGPT conversation page and, when possible, the ChatGPT conversation backend API using the user's existing ChatGPT session. This is used only to build the current conversation map.
 
-The ChatGPT Floating Launcher runs only on ChatGPT pages. It provides a quick way to open ChatMap or ChatMap settings and stores its visibility and position preferences locally.
+The ChatGPT Floating Launcher runs only on ChatGPT pages. It provides a quick way to open TurnMap or TurnMap settings and stores its visibility and position preferences locally.
 
 ## Update Notices
 
-The planned Update Notice may check a GitHub Release page or a version manifest to determine whether a newer ChatMap version is available. This check should not include conversation text, API keys, or ChatGPT session data.
+The planned Update Notice may check a GitHub Release page or a version manifest to determine whether a newer TurnMap version is available. This check should not include conversation text, API keys, or ChatGPT session data.
 
 ## Exports
 
@@ -46,7 +46,7 @@ Users can export maps as JSON, Markdown, Obsidian Canvas, SVG, or PNG. Exported 
 
 ## Permissions
 
-ChatMap requests:
+TurnMap requests:
 
 - `activeTab`, `tabs`, and `scripting` to communicate with the active ChatGPT tab.
 - `sidePanel` to provide the Edge side panel UI.

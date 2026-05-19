@@ -1,4 +1,4 @@
-export type AiProvider = "openai" | "deepseek" | "custom";
+﻿export type AiProvider = "openai" | "deepseek" | "custom";
 
 export type AiSettings = {
   provider: AiProvider;
@@ -8,7 +8,7 @@ export type AiSettings = {
   autoSummarize: boolean;
 };
 
-const SETTINGS_KEY = "chatmap.aiSettings";
+const SETTINGS_KEY = "turnmap.aiSettings";
 
 const DEFAULTS: Record<AiProvider, Omit<AiSettings, "provider" | "apiKey" | "autoSummarize">> = {
   openai: {

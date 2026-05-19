@@ -2,6 +2,7 @@ import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AiSettingsForm } from "../side-panel/settings/AiSettingsForm";
 import {
+  applyNodeColorRendering,
   loadUiSettings,
   saveUiSettings,
   type UiSettings
@@ -18,6 +19,7 @@ import {
   saveCustomLanguage,
   saveLanguageMode
 } from "../side-panel/i18n/i18n-storage";
+import { recordApiTaskLog } from "../side-panel/task-log";
 import type { LayoutMode } from "../side-panel/graph/graph-storage";
 import "../side-panel/styles.css";
 import "./settings-page.css";
@@ -64,6 +66,7 @@ function SettingsPage() {
       setLanguageMode(languageSettings.mode);
       setCustomLanguages(languageSettings.customLanguages);
       applyTheme(loadedSettings.theme);
+      applyNodeColorRendering(loadedSettings);
     });
   }, []);
 
@@ -72,8 +75,11 @@ function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (settings) applyTheme(settings.theme);
-  }, [settings?.theme]);
+    if (settings) {
+      applyTheme(settings.theme);
+      applyNodeColorRendering(settings);
+    }
+  }, [settings]);
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -107,14 +113,38 @@ function SettingsPage() {
     }
 
     setTranslating(true);
+    const taskId = `translate-${customLanguageName.trim().toLowerCase().replace(/\s+/g, "-")}`;
+    setStatus(t("task.translate", { language: customLanguageName.trim() }));
+    void recordApiTaskLog({
+      id: taskId,
+      kind: "translate",
+      status: "running",
+      message: t("task.translate", { language: customLanguageName.trim() }),
+      progress: 10
+    });
     try {
       const language = await generateCustomLanguage(customLanguageName);
       await saveCustomLanguage(language);
       setCustomLanguages((current) => [language, ...current.filter((item) => item.id !== language.id)].slice(0, 12));
       setLanguageMode(`custom:${language.id}`);
       setStatus(t("settings.translationSaved"));
+      void recordApiTaskLog({
+        id: taskId,
+        kind: "translate",
+        status: "success",
+        message: t("task.translateDone", { language: language.label }),
+        progress: 100
+      });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("settings.translationFailed"));
+      const message = error instanceof Error ? error.message : t("settings.translationFailed");
+      setStatus(message);
+      void recordApiTaskLog({
+        id: taskId,
+        kind: "translate",
+        status: "error",
+        message,
+        progress: 100
+      });
     } finally {
       setTranslating(false);
     }
@@ -204,6 +234,34 @@ function SettingsPage() {
               </div>
 
               <p>{t("settings.customTranslationHint")}</p>
+
+              <fieldset className="settings-fieldset">
+                <legend>{t("settings.nodeColorRendering")}</legend>
+                <label>
+                  {t("settings.nodeColorRenderMode")}
+                  <select
+                    value={settings.nodeColorRenderMode}
+                    onChange={(event) =>
+                      update({ nodeColorRenderMode: event.currentTarget.value as UiSettings["nodeColorRenderMode"] })
+                    }
+                  >
+                    <option value="gradient">{t("settings.nodeColorRenderGradient")}</option>
+                    <option value="solid">{t("settings.nodeColorRenderSolid")}</option>
+                  </select>
+                </label>
+                <label>
+                  {t("settings.nodeColorRenderStrength")}
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={settings.nodeColorRenderStrength}
+                    onChange={(event) => update({ nodeColorRenderStrength: Number(event.currentTarget.value) })}
+                  />
+                  <span>{settings.nodeColorRenderStrength}%</span>
+                </label>
+              </fieldset>
 
               <label className="settings-panel__check">
                 <input

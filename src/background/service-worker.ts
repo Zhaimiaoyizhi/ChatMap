@@ -1,8 +1,8 @@
-import type { FetchConversationApiMessage, FetchConversationApiResult } from "../shared/types";
+﻿import type { FetchConversationApiMessage, FetchConversationApiResult } from "../shared/types";
 
 type HeaderMap = Record<string, string>;
 
-const HEADER_CACHE_KEY = "chatmap.backendHeaders";
+const HEADER_CACHE_KEY = "turnmap.backendHeaders";
 const BACKEND_FILTER = { urls: ["https://chatgpt.com/backend-api/*"] };
 
 let cachedHeaders: HeaderMap | null = null;
@@ -144,12 +144,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return false;
   }
 
-  if ((message as { type: string }).type === "CHATMAP_FETCH_CONVERSATION_API") {
+  if ((message as { type: string }).type === "TURNMAP_FETCH_CONVERSATION_API") {
     fetchConversationApi(message as FetchConversationApiMessage).then(sendResponse);
     return true;
   }
 
-  if ((message as { type: string }).type === "CHATMAP_OPEN_SIDE_PANEL") {
+  if ((message as { type: string }).type === "TURNMAP_OPEN_SIDE_PANEL") {
     openSidePanel(sender.tab?.id).then(sendResponse).catch((error) =>
       sendResponse({
         ok: false,
@@ -159,7 +159,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
 
-  if ((message as { type: string }).type === "CHATMAP_OPEN_SETTINGS") {
+  if ((message as { type: string }).type === "TURNMAP_OPEN_SETTINGS") {
     openSettingsPage().then(sendResponse);
     return true;
   }

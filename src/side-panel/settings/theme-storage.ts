@@ -1,6 +1,6 @@
-export type ThemeMode = "browser" | "day" | "night" | "eye-care";
+﻿export type ThemeMode = "browser" | "day" | "night" | "eye-care";
 
-export const THEME_STORAGE_KEY = "chatmap.interface.theme";
+export const THEME_STORAGE_KEY = "turnmap.interface.theme";
 export const DEFAULT_THEME: ThemeMode = "day";
 
 export const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; description: string }> = [
@@ -22,8 +22,8 @@ export function resolveTheme(theme: ThemeMode): Exclude<ThemeMode, "browser"> {
 }
 
 export function applyTheme(theme: ThemeMode): void {
-  document.documentElement.dataset.chatmapTheme = resolveTheme(theme);
-  document.documentElement.dataset.chatmapThemeSetting = theme;
+  document.documentElement.dataset.turnmapTheme = resolveTheme(theme);
+  document.documentElement.dataset.turnmapThemeSetting = theme;
 }
 
 export async function loadTheme(): Promise<ThemeMode> {

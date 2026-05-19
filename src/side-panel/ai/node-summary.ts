@@ -42,7 +42,7 @@ function readableText(text: string, maxLength: number): string {
 }
 
 function buildPrompt(turn: Turn): string {
-  return `Create a compact learning-map node for this ChatGPT question-answer turn.
+  return `Create a compact learning-map node for this AI question-answer turn.
 
 Return exactly one JSON object with two string fields:
 - "title": a concrete title for this turn.
@@ -69,7 +69,7 @@ export async function summarizeTurn(turn: Turn): Promise<AiNodeSummary> {
     {
       role: "system" as const,
       content:
-        "You summarize visible ChatGPT conversation text for a mind-map node. Return strict JSON only. Do not include markdown fences, reasoning, workflow notes, or placeholder text."
+        "You summarize visible AI conversation text for a mind-map node. Return strict JSON only. Do not include markdown fences, reasoning, workflow notes, or placeholder text."
     },
     {
       role: "user" as const,
@@ -84,7 +84,7 @@ export async function summarizeTurn(turn: Turn): Promise<AiNodeSummary> {
   });
 
   try {
-    return normalizeSummary(extractJsonObject(content));
+    return normalizeSummary(extractJsonObject(content, { looseStringFields: ["title", "summary"] }));
   } catch (error) {
     if (!(error instanceof Error) || !/placeholder|missed title|missed.*summary/i.test(error.message)) {
       throw error;
@@ -107,6 +107,6 @@ export async function summarizeTurn(turn: Turn): Promise<AiNodeSummary> {
       { temperature: 0.1, maxTokens: 320, jsonMode: true }
     );
 
-    return normalizeSummary(extractJsonObject(retryContent));
+    return normalizeSummary(extractJsonObject(retryContent, { looseStringFields: ["title", "summary"] }));
   }
 }

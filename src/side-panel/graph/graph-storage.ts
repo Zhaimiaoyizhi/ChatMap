@@ -1,13 +1,23 @@
-import type { Edge, Node, XYPosition } from "@xyflow/react";
+﻿import type { Edge, Node, XYPosition } from "@xyflow/react";
+import { isNodeColorName, type NodeColorName } from "./graph-colors";
 
 export type LayoutMode = "single" | "radial" | "list" | "two-sided";
 type NodeStatus = "open" | "review" | "done";
+type StoredNodeOverride = {
+  title?: string;
+  summary?: string;
+  status?: NodeStatus;
+  tags?: string[];
+  color?: NodeColorName;
+  collapsed?: boolean;
+  important?: boolean;
+};
 
 type StoredGraph = {
   schemaVersion: number;
   positions: Record<string, XYPosition>;
   userEdges: Edge[];
-  nodeOverrides: Record<string, { title?: string; summary?: string; status?: NodeStatus; tags?: string[] }>;
+  nodeOverrides: Record<string, StoredNodeOverride>;
   customNodes?: Array<{
     id: string;
     position: XYPosition;
@@ -15,6 +25,9 @@ type StoredGraph = {
     summary: string;
     status?: NodeStatus;
     tags?: string[];
+    color?: NodeColorName;
+    collapsed?: boolean;
+    important?: boolean;
   }>;
   hiddenNodeIds?: string[];
   layoutMode?: LayoutMode;
@@ -22,9 +35,50 @@ type StoredGraph = {
   hiddenAutoEdgeIds?: string[];
 };
 
-const STORAGE_PREFIX = "chatmap.graph.";
-const DEFAULT_LAYOUT_KEY = "chatmap.defaultLayout";
+const STORAGE_PREFIX = "turnmap.graph.";
+const DEFAULT_LAYOUT_KEY = "turnmap.defaultLayout";
 const CURRENT_SCHEMA_VERSION = 2;
+
+function isDefaultRootSummary(summary: unknown): boolean {
+  return typeof summary === "string" && /^\d+\s+mapped turns$/i.test(summary.trim());
+}
+
+function isGenericConversationRootTitle(title: unknown): boolean {
+  if (typeof title !== "string") return true;
+  const normalized = title.trim();
+  if (!normalized) return true;
+  return [
+    /^TurnMap$/i,
+    /^Current AI conversation$/i,
+    /^Current conversation$/i,
+    /^Agents$/i,
+    /^Intelligence$/i,
+    /^Projects$/i,
+    /^Chats$/i,
+    /^Upgrade(?: to Pro)?$/i,
+    /^Qwen$/i,
+    /^Qwen Studio$/i,
+    /^Qwen(?:\d+(?:\.\d+)*)?[-\s]*(?:Plus|Max|Turbo|Coder|VL|Omni|Instruct)$/i,
+    /^通义$/i,
+    /^通义千问$/i,
+    /^鍗冮棶$/i,
+    /^Claude$/i,
+    /^智谱清言$/i,
+    /^ChatGLM$/i,
+    /^Z\.ai$/i,
+    /^GLM$/i,
+    /^Le Chat$/i,
+    /^Mistral$/i,
+    /^Mistral Le Chat$/i,
+    /^Arena$/i,
+    /^LMArena$/i,
+    /^Chatbot Arena$/i,
+    /^Arena AI: The Official AI Ranking & LLM Leaderboard$/i,
+    /批量操作|重命名|删除对话/,
+    /Official AI Ranking/i,
+    /LLM Leaderboard/i
+  ].some((pattern) => pattern.test(normalized));
+}
 
 function storageKey(conversationId: string): string {
   return `${STORAGE_PREFIX}${conversationId}`;
@@ -65,10 +119,23 @@ export async function saveStoredGraph(
     nodes.map((node) => [
       node.id,
       {
-        title: typeof node.data?.title === "string" ? node.data.title : undefined,
-        summary: typeof node.data?.summary === "string" ? node.data.summary : undefined,
+        title:
+          node.id === "conversation-root" && isGenericConversationRootTitle(node.data?.title)
+            ? undefined
+            : typeof node.data?.title === "string"
+              ? node.data.title
+              : undefined,
+        summary:
+          node.id === "conversation-root" && isDefaultRootSummary(node.data?.summary)
+            ? undefined
+            : typeof node.data?.summary === "string"
+              ? node.data.summary
+              : undefined,
         status: nodeStatus(node.data?.status),
-        tags: Array.isArray(node.data?.tags) ? node.data.tags.filter((tag) => typeof tag === "string") : undefined
+        tags: Array.isArray(node.data?.tags) ? node.data.tags.filter((tag) => typeof tag === "string") : undefined,
+        color: isNodeColorName(node.data?.color) ? node.data.color : undefined,
+        collapsed: typeof node.data?.collapsed === "boolean" ? node.data.collapsed : undefined,
+        important: typeof node.data?.important === "boolean" ? node.data.important : undefined
       }
     ])
   );
@@ -80,7 +147,10 @@ export async function saveStoredGraph(
       title: typeof node.data?.title === "string" ? node.data.title : node.id,
       summary: typeof node.data?.summary === "string" ? node.data.summary : "",
       status: nodeStatus(node.data?.status),
-      tags: Array.isArray(node.data?.tags) ? node.data.tags.filter((tag) => typeof tag === "string") : undefined
+      tags: Array.isArray(node.data?.tags) ? node.data.tags.filter((tag) => typeof tag === "string") : undefined,
+      color: isNodeColorName(node.data?.color) ? node.data.color : undefined,
+      collapsed: typeof node.data?.collapsed === "boolean" ? node.data.collapsed : undefined,
+      important: typeof node.data?.important === "boolean" ? node.data.important : undefined
     }));
 
   await chrome.storage.local.set({

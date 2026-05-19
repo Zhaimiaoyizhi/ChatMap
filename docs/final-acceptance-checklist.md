@@ -1,4 +1,4 @@
-# ChatMap Final Acceptance Checklist
+﻿# TurnMap Final Acceptance Checklist
 
 Use this checklist before handing a build to testers.
 
@@ -8,19 +8,19 @@ Latest QA record: `docs/qa-run-2026-05-12.md`.
 
 - [x] `npm.cmd run typecheck` passes.
 - [x] `npm.cmd run build` passes.
-- [x] `npm.cmd run package` creates `release/chatmap-v0.1.0.zip`.
+- [x] `npm.cmd run package` creates `release/turnmap-v0.1.0.zip`.
 - [x] `dist/manifest.json` contains the expected permissions and host permissions.
 
 ## Edge Loading
 
 - [x] Load `<project-root>\dist` from `edge://extensions`.
-- [x] ChatMap side panel opens from a ChatGPT conversation.
-- [x] ChatMap Settings opens from the main UI and browser extension options.
+- [x] TurnMap side panel opens from a ChatGPT conversation.
+- [x] TurnMap Settings opens from the main UI and browser extension options.
 - [x] ChatGPT Floating Launcher appears on ChatGPT pages when enabled.
-- [x] Launcher left-click opens ChatMap; launcher right-click opens Settings.
+- [x] Launcher left-click opens TurnMap; launcher right-click opens Settings.
 - [x] Launcher drag position persists after page refresh.
 - [x] Refresh maps the full conversation when opened near the top, middle, and bottom.
-- [x] New ChatGPT turns appear in ChatMap without manual page scrolling.
+- [x] New ChatGPT turns appear in TurnMap without manual page scrolling.
 
 ## Navigation
 
@@ -54,7 +54,7 @@ Latest QA record: `docs/qa-run-2026-05-12.md`.
 
 ## Import And Export
 
-- [x] ChatMap JSON export restores the same graph through import.
+- [x] TurnMap JSON export restores the same graph through import.
 - [x] Obsidian Canvas export opens as an editable canvas in Obsidian.
 - [x] Markdown export and copy include nodes and links.
 - [x] SVG and PNG export produce non-empty visual maps without text overflowing node cards.

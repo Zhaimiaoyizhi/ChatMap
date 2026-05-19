@@ -1,4 +1,4 @@
-export type SourceAnchor = {
+﻿export type SourceAnchor = {
   turnIndex: number;
   userMessageId?: string;
   assistantMessageId?: string;
@@ -23,11 +23,17 @@ export type ConversationInfo = {
   title: string;
 };
 
+export type ConversationSite = {
+  id: string;
+  displayName: string;
+};
+
 export type ExtractedTurnsMessage = {
-  type: "CHATMAP_TURNS_UPDATED";
+  type: "TURNMAP_TURNS_UPDATED";
   turns: Turn[];
   conversationTitle: string;
   conversationId: string;
+  site?: ConversationSite;
   harvestMeta?: {
     attempted: boolean;
     source: "conversation-api" | "structured" | "web-storage" | "indexeddb" | "dom" | "deep-scan";
@@ -35,31 +41,39 @@ export type ExtractedTurnsMessage = {
     scrollHeight: number;
     clientHeight: number;
     scannedSteps: number;
+    diagnostics?: {
+      selectorBlocks?: number;
+      selectorTurns?: number;
+      fallbackSelectorCandidates?: number;
+      fallbackTextCandidates?: number;
+      fallbackBlocks?: number;
+      fallbackTurns?: number;
+    };
   };
 };
 
 export type RequestTurnsMessage = {
-  type: "CHATMAP_REQUEST_TURNS";
+  type: "TURNMAP_REQUEST_TURNS";
   harvest?: boolean;
   ensureFull?: boolean;
 };
 
 export type JumpToTurnMessage = {
-  type: "CHATMAP_JUMP_TO_TURN";
+  type: "TURNMAP_JUMP_TO_TURN";
   anchor: SourceAnchor;
 };
 
 export type SetFloatingPanelMessage = {
-  type: "CHATMAP_SET_FLOATING_PANEL";
+  type: "TURNMAP_SET_FLOATING_PANEL";
   enabled: boolean;
 };
 
 export type OpenSidePanelMessage = {
-  type: "CHATMAP_OPEN_SIDE_PANEL";
+  type: "TURNMAP_OPEN_SIDE_PANEL";
 };
 
 export type OpenSettingsMessage = {
-  type: "CHATMAP_OPEN_SETTINGS";
+  type: "TURNMAP_OPEN_SETTINGS";
 };
 
 export type JumpToTurnResult = {
@@ -68,7 +82,7 @@ export type JumpToTurnResult = {
 };
 
 export type FetchConversationApiMessage = {
-  type: "CHATMAP_FETCH_CONVERSATION_API";
+  type: "TURNMAP_FETCH_CONVERSATION_API";
   conversationId: string;
 };
 
@@ -79,7 +93,7 @@ export type FetchConversationApiResult = {
   reason?: string;
 };
 
-export type ChatMapMessage =
+export type TurnMapMessage =
   | ExtractedTurnsMessage
   | RequestTurnsMessage
   | JumpToTurnMessage
