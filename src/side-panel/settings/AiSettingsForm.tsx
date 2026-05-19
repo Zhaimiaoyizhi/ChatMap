@@ -3,8 +3,11 @@ import { testAiConnection } from "../ai/openai-compatible";
 import { useI18n } from "../i18n/useI18n";
 import { recordApiTaskLog } from "../task-log";
 import {
+  MAX_MAX_TOKENS,
+  MIN_MAX_TOKENS,
   defaultsForProvider,
   loadAiSettings,
+  normalizeMaxTokens,
   saveAiSettings,
   type AiProvider,
   type AiSettings
@@ -33,11 +36,12 @@ export function AiSettingsForm({ compact = false, onSaved }: AiSettingsFormProps
     setSettings((current) => ({
       ...defaultsForProvider(provider),
       apiKey: current.apiKey,
+      maxTokens: current.maxTokens,
       provider
     }));
   }, []);
 
-  const updateField = useCallback((field: keyof AiSettings, value: string | boolean) => {
+  const updateField = useCallback((field: keyof AiSettings, value: string | number | boolean) => {
     setSettings((current) => ({
       ...current,
       [field]: value
@@ -138,7 +142,22 @@ export function AiSettingsForm({ compact = false, onSaved }: AiSettingsFormProps
         />
       </label>
 
+      <label>
+        {t("ai.maxTokens")}
+        <input
+          type="number"
+          min={MIN_MAX_TOKENS}
+          max={MAX_MAX_TOKENS}
+          step={128}
+          value={settings.maxTokens}
+          onChange={(event) => updateField("maxTokens", normalizeMaxTokens(event.currentTarget.value))}
+          placeholder="1200"
+        />
+      </label>
+
       <p>
+        {t("ai.maxTokensHint")}
+        <br />
         {t("ai.privacy")}
       </p>
 

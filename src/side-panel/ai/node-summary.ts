@@ -79,7 +79,7 @@ export async function summarizeTurn(turn: Turn): Promise<AiNodeSummary> {
 
   const content = await requestChatCompletion(settings, messages, {
     temperature: 0.1,
-    maxTokens: 320,
+    maxTokens: 900,
     jsonMode: true
   });
 
@@ -104,7 +104,7 @@ export async function summarizeTurn(turn: Turn): Promise<AiNodeSummary> {
             "The previous response was not usable. Generate the actual title and summary from the visible text above. Return only JSON with real title and summary values."
         }
       ],
-      { temperature: 0.1, maxTokens: 320, jsonMode: true }
+      { temperature: 0.1, maxTokens: 900, jsonMode: true }
     );
 
     return normalizeSummary(extractJsonObject(retryContent, { looseStringFields: ["title", "summary"] }));

@@ -108,6 +108,7 @@ TurnMap has a dedicated settings page for global UI preferences:
 - **Language**: follow browser, English, Chinese, and locally saved AI-generated custom UI translations.
 - **Default layout**: Single-side, Radial, Matrix, or Two-sided.
 - **Node color rendering**: choose gradient or solid background rendering and adjust color intensity.
+- **AI output budget**: adjust `max_tokens` for providers or reasoning models that need more response budget.
 - **Entry points**: manage Side Panel, Full Page, Float, and page launcher preferences.
 
 ## AI Features

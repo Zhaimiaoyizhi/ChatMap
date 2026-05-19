@@ -95,6 +95,7 @@ TurnMap 的设置页面用于管理全局界面偏好：
 - **语言**：跟随浏览器、英文、中文，以及由 AI 生成并保存在本地的自定义界面翻译。
 - **默认布局**：Single-side、Radial、Matrix 或 Two-sided。
 - **节点染色渲染**：可选择渐变或底色，并用滑动条调节渲染程度。
+- **AI 输出预算**：调整 `max_tokens`，适配需要更多回答预算的 provider 或推理模型。
 - **入口显示**：管理 Side Panel、Full Page、Float 和页面悬浮启动器相关偏好。
 
 ## AI 功能

@@ -158,7 +158,7 @@ export async function suggestSemanticEdges(nodes: Node[]): Promise<Edge[]> {
         content: buildPrompt(suggestionNodes)
       }
     ],
-    { temperature: 0.1, maxTokens: 1200, jsonMode: true }
+    { temperature: 0.1, maxTokens: 1800, jsonMode: true }
   );
 
   const parsed = tryExtractJsonObject(content);

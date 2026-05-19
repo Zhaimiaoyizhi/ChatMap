@@ -34,6 +34,15 @@ For JSON-producing tasks, TurnMap may also send:
 
 If a provider rejects `response_format`, TurnMap retries without it.
 
+`max_tokens` is always included in AI requests. The default is 1200 and can be
+increased in Settings. TurnMap also applies task-level minimums so reasoning
+models have enough output budget left after their internal thinking:
+
+- Test Connection: at least 256
+- Summarize: at least 900
+- Suggest Links: at least 1800
+- AI UI translation: at least 5000
+
 ## Expected Response
 
 Preferred response shape:

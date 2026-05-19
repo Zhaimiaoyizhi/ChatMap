@@ -215,6 +215,9 @@ export const EN_TRANSLATIONS = {
   "ai.model": "Model",
   "ai.apiKey": "API Key",
   "ai.apiKeyPlaceholder": "Stored locally",
+  "ai.maxTokens": "Max output tokens",
+  "ai.maxTokensHint":
+    "Increase this if reasoning models return empty answers because thinking used the whole output budget.",
   "ai.privacy":
     "API keys are saved in this browser's extension storage. TurnMap sends conversation text only when you run AI features or enable auto summarize.",
   "ai.autoSummarize": "Auto summarize new/default nodes",
@@ -424,6 +427,8 @@ export const ZH_TRANSLATIONS: TranslationMap = {
   "ai.model": "模型",
   "ai.apiKey": "API Key",
   "ai.apiKeyPlaceholder": "保存在本地",
+  "ai.maxTokens": "最大输出 tokens",
+  "ai.maxTokensHint": "如果推理模型因为思考占满输出预算而返回空内容，请调高这个值。",
   "ai.privacy": "API Key 会保存在浏览器扩展存储中。只有在你运行 AI 功能或启用自动总结时，TurnMap 才会发送对话文本。",
   "ai.autoSummarize": "自动总结新的默认节点",
   "ai.status.local": "设置保存在本地。AI 功能会把选中的对话文本发送给你配置的 provider。",

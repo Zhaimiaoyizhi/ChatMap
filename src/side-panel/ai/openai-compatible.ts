@@ -1,5 +1,9 @@
 import type { AiSettings } from "../settings/ai-settings-storage";
 
+const DEFAULT_REQUEST_MAX_TOKENS = 1200;
+const MIN_REQUEST_MAX_TOKENS = 256;
+const MAX_REQUEST_MAX_TOKENS = 12000;
+
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -9,6 +13,7 @@ type ChatCompletionOptions = {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  retriedEmptyResponse?: boolean;
 };
 
 type ProviderPayload = {
@@ -253,6 +258,27 @@ async function ensureHostPermission(settings: AiSettings): Promise<void> {
   }
 }
 
+function effectiveMaxTokens(settings: AiSettings, requested?: number): number {
+  const configured = normalizeRequestMaxTokens(settings.maxTokens);
+  if (requested == null) return configured;
+  return Math.max(configured, normalizeRequestMaxTokens(requested));
+}
+
+function expandedMaxTokens(current: number): number {
+  return normalizeRequestMaxTokens(Math.max(current + 512, current * 2, MIN_REQUEST_MAX_TOKENS));
+}
+
+function normalizeRequestMaxTokens(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number.parseInt(value.trim(), 10)
+        : DEFAULT_REQUEST_MAX_TOKENS;
+  if (!Number.isFinite(parsed)) return DEFAULT_REQUEST_MAX_TOKENS;
+  return Math.max(MIN_REQUEST_MAX_TOKENS, Math.min(MAX_REQUEST_MAX_TOKENS, Math.round(parsed)));
+}
+
 export async function requestChatCompletion(
   settings: AiSettings,
   messages: ChatMessage[],
@@ -260,11 +286,12 @@ export async function requestChatCompletion(
 ): Promise<string> {
   assertSettings(settings);
   await ensureHostPermission(settings);
+  const maxTokens = effectiveMaxTokens(settings, options.maxTokens);
 
   const body: Record<string, unknown> = {
     model: settings.model,
     temperature: options.temperature ?? 0.2,
-    max_tokens: options.maxTokens,
+    max_tokens: maxTokens,
     messages
   };
   if (options.jsonMode) {
@@ -292,7 +319,21 @@ export async function requestChatCompletion(
 
   const content = contentFromPayload(payload);
   if (content == null && options.jsonMode) {
-    return requestChatCompletion(settings, messages, { ...options, jsonMode: false });
+    return requestChatCompletion(settings, messages, {
+      ...options,
+      jsonMode: false,
+      maxTokens: expandedMaxTokens(maxTokens),
+      retriedEmptyResponse: true
+    });
+  }
+
+  if (content == null && !options.retriedEmptyResponse) {
+    return requestChatCompletion(settings, messages, {
+      ...options,
+      jsonMode: false,
+      maxTokens: expandedMaxTokens(maxTokens),
+      retriedEmptyResponse: true
+    });
   }
 
   if (content == null) {
@@ -319,7 +360,7 @@ export async function testAiConnection(settings: AiSettings): Promise<void> {
         content: "Connection test"
       }
     ],
-    { temperature: 0, maxTokens: 8 }
+    { temperature: 0, maxTokens: 256 }
   );
 
   if (!content.trim()) {
