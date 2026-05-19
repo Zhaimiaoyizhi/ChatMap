@@ -138,6 +138,16 @@ test("manifest injects the content script on qianwen.com conversations", () => {
   assert.ok(webAccessibleMatches.includes("https://*.qianwen.com/*"));
 });
 
+test("DeepSeek profile strips visible thinking text before assistant answers", () => {
+  const source = readFileSync(new URL("../src/content/conversation-adapters.ts", import.meta.url), "utf8");
+  const profile = source.slice(source.indexOf('site: siteById("deepseek")'), source.indexOf('site: siteById("kimi")'));
+
+  assert.match(profile, /cleanDeepSeekConversationText/);
+  assert.match(profile, /\[class\*='think' i\]/);
+  assert.match(profile, /\[class\*='reason' i\]/);
+  assert.match(source, /finalAnswerMarkers/);
+});
+
 test("manifest injects the content script on GLM conversations", () => {
   const manifest = JSON.parse(readFileSync(new URL("../public/manifest.json", import.meta.url), "utf8"));
   const contentScriptMatches = manifest.content_scripts?.flatMap((entry) => entry.matches ?? []) ?? [];

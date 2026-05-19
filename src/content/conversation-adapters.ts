@@ -112,6 +112,49 @@ function cleanGoogleAiStudioText(text: string, role: "user" | "assistant"): stri
     .trim();
 }
 
+function cleanDeepSeekConversationText(text: string, role: "user" | "assistant"): string {
+  const cleaned = text
+    .replace(/\b(?:Copy|Like|Dislike|Share|Regenerate|Edit)\b/gi, " ")
+    .replace(/\s*(?:复制|点赞|点踩|分享|重新生成|编辑)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (role !== "assistant") return cleaned;
+
+  const withoutThinkingLabel = cleaned
+    .replace(/^已思考\s*(?:[（(].*?[）)])?\s*/i, "")
+    .replace(/^深度思考\s*/i, "")
+    .replace(/^Thinking\s*(?:for\s+[\d.]+\s*(?:s|sec|secs|seconds))?\s*/i, "")
+    .trim();
+
+  const finalAnswerMarkers = [
+    "你遇到",
+    "这是因为",
+    "原因是",
+    "解决方法",
+    "建议",
+    "可以这样",
+    "要修复",
+    "总结",
+    "简而言之",
+    "The issue is",
+    "This happens because",
+    "To fix",
+    "You can fix",
+    "In short"
+  ];
+  const firstMarkerIndex = finalAnswerMarkers
+    .map((marker) => withoutThinkingLabel.indexOf(marker))
+    .filter((index) => index > 0)
+    .sort((left, right) => left - right)[0];
+  if (firstMarkerIndex) return withoutThinkingLabel.slice(firstMarkerIndex).trim();
+
+  const looksLikeReasoningOnly =
+    /^(?:We need|We should|The user|User asks|Let's|I need to|Need to)\b/i.test(withoutThinkingLabel) ||
+    /\b(?:the user says|the user is asking|we need to|we should|I should)\b/i.test(withoutThinkingLabel);
+  return looksLikeReasoningOnly ? "" : withoutThinkingLabel;
+}
+
 function cleanGlmConversationText(text: string, role: "user" | "assistant"): string {
   let cleaned = text
     .replace(/\s*(?:批量操作|重命名|删除对话|复制|分享|重新生成|编辑)\s*/g, " ")
@@ -152,6 +195,7 @@ function cleanArenaBattleChromeText(text: string): string {
 
 const webProfiles: WebConversationProfile[] = [
   {
+    ...sharedWebSelectors,
     site: siteById("deepseek"),
     titleSuffixPattern: /\s*[-|]\s*DeepSeek.*$/i,
     userSelectors: [
@@ -175,6 +219,14 @@ const webProfiles: WebConversationProfile[] = [
       "[class*='assistant-message' i]",
       "[class*='message-assistant' i]",
       "[class*='bot-message' i]"
+    ],
+    excludeSelectors: [
+      "[class*='think' i]",
+      "[class*='reason' i]",
+      "[class*='thought' i]",
+      "[class*='cot' i]",
+      "[data-testid*='think' i]",
+      "[data-testid*='reason' i]"
     ],
     roleMessageRootSelectors: [
       {
@@ -221,7 +273,7 @@ const webProfiles: WebConversationProfile[] = [
         /\u590d\u5236|\u70b9\u8d5e|\u70b9\u8e29|\u5206\u4eab/
       ]
     },
-    ...sharedWebSelectors
+    cleanText: cleanDeepSeekConversationText
   },
   {
     ...sharedWebSelectors,
